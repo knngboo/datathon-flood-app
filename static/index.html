@@ -111,6 +111,11 @@
   .meta { font-size: .82rem; color: var(--muted); }
   .where { font-weight: 600; color: var(--ink); margin: 4px 0 6px; font-size: .95rem; }
   .flags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .hotglow { filter: drop-shadow(0 0 6px #F97316) drop-shadow(0 0 14px rgba(249,115,22,.55)); animation: hotpulse 2.4s ease-in-out infinite; }
+  @keyframes hotpulse { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: .45; } }
+  .card.hotcard { border-color: #FDBA74; box-shadow: 0 0 0 1px #FDBA74, 0 0 14px rgba(249,115,22,.35); }
+  .card.hotcard.sel { box-shadow: 0 0 0 2px var(--ink), 0 0 16px rgba(249,115,22,.45); }
+  @media (prefers-reduced-motion: reduce) { .hotglow { animation: none; } }
   .flag.hot { display: inline-flex; align-items: center; gap: 3px; background: #FFF7ED; border-color: #FDBA74; color: #9A3412; font-weight: 700; }
   .flag { font-size: .78rem; padding: 2px 8px; border-radius: 999px; background: var(--wash); border: 1px solid var(--line); }
   .status { font-size: .78rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; color: #fff; }
@@ -456,9 +461,12 @@ async function loadRows(fit) {
       .bindTooltip(`${r.id}: ${r.level}${done ? ' (resolved)' : ''}`).on('click', () => selectReq(r.id, false)).addTo(opsmap); });
   $('#briefbtn').disabled = !open.length;
   if (hotLayer) hotLayer.remove();
-  hotLayer = L.layerGroup(HOT.map(h => L.marker([h.lat, h.lon], { zIndexOffset: 1000, icon: L.divIcon({ className: '', iconSize: [44, 44], iconAnchor: [22, 62],
+  const ring = h => { const R = 6371000, t = Math.PI / 180; const far = Math.max(...h.ids.map(id => { const r = ROWS.find(x => x.id === id);
+      const x = Math.sin((r.lat - h.lat) * t / 2) ** 2 + Math.cos(h.lat * t) * Math.cos(r.lat * t) * Math.sin((r.lon - h.lon) * t / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); }));
+    return L.circle([h.lat, h.lon], { radius: far + 350, color: '#F97316', weight: 4, fillColor: '#FB923C', fillOpacity: .08, className: 'hotglow', interactive: false }); };
+  hotLayer = L.layerGroup(HOT.map(ring).concat(HOT.map(h => L.marker([h.lat, h.lon], { zIndexOffset: 1000, icon: L.divIcon({ className: '', iconSize: [44, 44], iconAnchor: [22, 62],
     html: `<div style="position:relative">${flame(40)}<span style="position:absolute;right:-4px;top:-2px;background:#13294B;color:#fff;font:800 11px Public Sans,system-ui;border-radius:999px;padding:1px 6px;border:2px solid #fff">${h.ids.length}</span></div>` }) })
-    .bindTooltip(`Hotspot: ${h.ids.length} open requests within ${HOT_KM} km (${h.people} people). Send one crew.`).on('click', () => selectReq(h.ids[0], false)))).addTo(opsmap);
+    .bindTooltip(`Hotspot: ${h.ids.length} open requests within ${HOT_KM} km (${h.people} people). Send one crew.`).on('click', () => selectReq(h.ids[0], false))))).addTo(opsmap);
   if (fit && ROWS.length) opsmap.fitBounds(ROWS.map(r => [r.lat, r.lon]), { padding: [40, 40], maxZoom: 12 });
   if (!selId && ROWS.length) selId = ROWS[0].id;
   if (selId && ROWS.find(r => r.id === selId)) selectReq(selId, false);
@@ -466,7 +474,7 @@ async function loadRows(fit) {
 function card(r) {
   const hs = HOT.find(h => h.ids.includes(r.id));
   const flags = r.why.slice(0, 3).map(w => `<span class="flag">${esc(w.split(':')[0].split(';')[0])}</span>`).join('') + (r.why.length > 3 ? `<span class="flag">+${r.why.length - 3} more</span>` : '') + `<span class="flag">${r.people} ${r.people === 1 ? 'person' : 'people'}</span>`;
-  return `<div class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Resolved' ? 'done' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
+  return `<div class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Resolved' ? 'done' : ''} ${hs ? 'hotcard' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
     <div class="cardtop"><span class="lvl" style="color:${LVL[r.level]}">${r.level}</span><span class="status" style="background:${ST[r.status]}">${r.status}</span></div>
     <div class="meta">${r.id}, sent ${esc(r.time)}${r.name ? ', ' + esc(r.name) : ''}${r.sample ? ', demo' : ''}</div>
     <div class="where">${esc(r.label)}</div><div class="flags">${hs ? `<span class="flag hot">${flame(14)}Hotspot: ${hs.ids.length} nearby</span>` : ''}${flags}</div></div>`;

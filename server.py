@@ -796,10 +796,23 @@ async def api_briefing(request):
     if not rows:
         return JSONResponse({"answer": "No open reports."})
     table = "\n".join(f"{r['id']} | {r['level']} | {r['label']} | {', '.join(r['why'])} | people {r['people']} | {r['status']}" for r in rows[:25])
+    seen, groups = set(), []
+    for r in rows:
+        if r["id"] in seen:
+            continue
+        g = [r]; seen.add(r["id"])
+        for x in g:
+            for o in rows:
+                if o["id"] not in seen and km(x["lat"], x["lon"], o["lat"], o["lon"]) <= 1.5:
+                    seen.add(o["id"]); g.append(o)
+        if len(g) >= 2:
+            groups.append(", ".join(x["id"] for x in g))
+    if groups:
+        table += "\n\nHotspots (requests within 1.5 km of each other, one crew can reach them together): " + "; ".join(groups)
     try:
         answer = await run_in_threadpool(ask_ai, [
             {"role": "system", "content": "You brief flood rescue crews. Plain words, under 110 words, no headings. "
-             "Say which 3 requests to reach first and why, by request ID. Use only the list."},
+             "Say which requests to reach first and why, by request ID. If a hotspot contains urgent requests, say one crew can cover that hotspot together. Use only the list."},
             {"role": "user", "content": table}], 300)
     except Exception:
         return JSONResponse({"error": "The AI didn't answer. Try again."}, status_code=502)
