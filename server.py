@@ -530,7 +530,7 @@ def live_gauges(lat, lon):
     return out
 
 
-HISTORY_SUMMARY = {}
+HISTORY_SUMMARY = {tuple(k.split("|")): v for k, v in CACHE.get("summaries", {}).items()}
 
 
 async def api_history(request):
@@ -561,6 +561,9 @@ async def api_history(request):
                 {"role": "user", "content": facts}], 120)
         except Exception:
             HISTORY_SUMMARY[key] = ""
+        if HISTORY_SUMMARY[key]:
+            CACHE.setdefault("summaries", {})["|".join(key)] = HISTORY_SUMMARY[key]
+            save_cache()
     return JSONResponse({**h, "summary": HISTORY_SUMMARY[key]})
 
 
@@ -812,7 +815,7 @@ async def api_briefing(request):
     try:
         answer = await run_in_threadpool(ask_ai, [
             {"role": "system", "content": "You brief flood rescue crews. Plain words, under 110 words, no headings. "
-             "Say which requests to reach first and why, by request ID. If a hotspot contains urgent requests, say one crew can cover that hotspot together. Use only the list."},
+             "Say which requests to reach first and why, by request ID. Always put every Critical request before any High, and High before Medium. If a hotspot contains urgent requests, say one crew can cover that hotspot together. Use only the list."},
             {"role": "user", "content": table}], 300)
     except Exception:
         return JSONResponse({"error": "The AI didn't answer. Try again."}, status_code=502)
