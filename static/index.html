@@ -444,7 +444,9 @@ function renderWhere(box) {
   $('#next').onclick = () => { S.step = 1; renderStep(); };
   if (S.lat) showChosen(); else input.focus();
 }
-async function nameOf(lat, lon) { try { return (await getJSON(`/api/reverse?lat=${lat}&lon=${lon}`)).label; } catch { return 'Pin on the map'; } }
+async function nameOf(lat, lon) {
+  for (let i = 0; i < 2; i++) { try { const l = (await getJSON(`/api/reverse?lat=${lat}&lon=${lon}`)).label; if (l && l !== 'Pin on the map') return l; } catch {} }
+  return `Map pin at ${(+lat).toFixed(4)}, ${(+lon).toFixed(4)}`; }
 function setLocation(lat, lon, label) { S.lat = lat; S.lon = lon; S.label = label; showChosen(); }
 function showChosen() {
   $('#finder').hidden = true; $('#chosen').hidden = false; $('#chosenlabel').textContent = S.label; $('#next').disabled = false;
