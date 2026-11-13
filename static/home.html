@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light only">
+<meta name="darkreader-lock">
+<title>Texas Flood Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: light; --ink:#13294B; --text:#1F2937; --muted:#4B5563; --line:#D1D7E0; --wash:#F3F5F8; --red:#B91C1C; --green:#15803D; --amber:#A16207; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: "Public Sans", system-ui, sans-serif; color: var(--text); background: #fff; }
+  header { height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: #fff; z-index: 10; }
+  .brand { font-weight: 800; font-size: 1.15rem; color: var(--ink); text-decoration: none; white-space: nowrap; }
+  header nav a { margin-left: 20px; color: var(--muted); font-weight: 600; text-decoration: none; font-size: .95rem; }
+  main { max-width: 1120px; margin: 0 auto; padding: 0 24px 80px; }
+  section { padding: 36px 0 10px; }
+  section + section { border-top: 1px solid var(--line); margin-top: 26px; }
+  .stepnum { color: var(--muted); font-weight: 700; font-size: .9rem; margin-bottom: 4px; }
+  h1 { font-size: 2rem; line-height: 1.15; color: var(--ink); margin: 0 0 10px; font-weight: 800; }
+  h2 { font-size: 1.55rem; color: var(--ink); margin: 0 0 8px; font-weight: 800; }
+  h3 { font-size: 1.05rem; color: var(--ink); margin: 0 0 10px; }
+  .lead { font-size: 1.08rem; color: var(--muted); line-height: 1.55; margin: 0 0 22px; max-width: 70ch; }
+  .btn { font: inherit; font-weight: 700; background: var(--ink); color: #fff; border: 2px solid var(--ink); border-radius: 10px; padding: 11px 18px; cursor: pointer; }
+  .btn.ghost { background: #fff; color: var(--ink); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .link { font: inherit; background: none; border: 0; color: var(--ink); font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
+  :focus-visible { outline: 3px solid #2563EB; outline-offset: 2px; }
+
+  /* step 1 */
+  .search { position: relative; max-width: 620px; }
+  .search .row { display: flex; gap: 8px; }
+  .search input { flex: 1; min-width: 0; font: inherit; font-size: 1.05rem; padding: 13px 15px; border: 2px solid var(--line); border-radius: 12px; }
+  .search input:focus { outline: none; border-color: var(--ink); }
+  .sugg { position: absolute; left: 0; right: 0; top: 100%; list-style: none; margin: 6px 0 0; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(19,41,75,.14); z-index: 5; }
+  .sugg li { padding: 11px 12px; border-radius: 8px; cursor: pointer; }
+  .sugg li.active, .sugg li:hover { background: var(--wash); }
+  .sugg .head { font-size: .8rem; color: var(--muted); cursor: default; }
+  .msg { margin: 10px 2px 0; color: var(--muted); min-height: 1.3em; }
+  .msg b { color: var(--ink); }
+  .group { margin-top: 28px; }
+  .group h3 { margin-bottom: 12px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+  .hood { text-align: left; font: inherit; background: #fff; border: 2px solid var(--line); border-radius: 12px; padding: 0; overflow: hidden; cursor: pointer; }
+  .hood:hover { border-color: var(--ink); }
+  .hood.sel { border-color: var(--ink); box-shadow: 0 0 0 2px var(--ink); }
+  .hood img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; background: var(--wash); }
+  .hood div { padding: 10px 12px 12px; }
+  .hood b { display: block; color: var(--ink); line-height: 1.25; }
+  .hood span { font-size: .85rem; color: var(--muted); }
+
+  /* step 2 */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  .compare { position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 1 / 1; background: var(--wash); }
+  .compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .compare .bar { position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: #fff; box-shadow: 0 0 0 1px rgba(19,41,75,.4); pointer-events: none; }
+  .compare input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; }
+  .caps { display: flex; justify-content: space-between; gap: 8px; font-size: .85rem; color: var(--muted); margin: 8px 2px 12px; }
+  .strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+  .strip button { flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; cursor: pointer; background: none; }
+  .strip button.sel { border-color: var(--ink); }
+  .strip img { width: 64px; height: 64px; object-fit: cover; display: block; }
+  .verdict { display: inline-block; font-weight: 800; font-size: .85rem; color: #fff; padding: 3px 10px; border-radius: 6px; margin-bottom: 8px; }
+  .bubble { border-radius: 10px; padding: 12px 14px; line-height: 1.55; margin: 0 0 10px; white-space: pre-wrap; }
+  .bubble.ai { background: var(--wash); }
+  .bubble.me { border: 1px solid var(--line); font-weight: 600; color: var(--ink); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
+  .chips button { font: inherit; font-size: .9rem; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 999px; padding: 7px 13px; cursor: pointer; }
+  .chips button:hover { border-color: var(--ink); }
+  .ask { display: flex; gap: 8px; }
+  .ask input { flex: 1; min-width: 0; font: inherit; padding: 11px 13px; border: 2px solid var(--line); border-radius: 10px; }
+  .note { font-size: .85rem; color: var(--muted); margin-top: 8px; }
+
+  /* step 3 */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 16px 0 10px; }
+  .stat { border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .stat b { display: block; font-size: 1.9rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: .92rem; line-height: 1.35; display: block; margin-top: 4px; }
+  .zipedit { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+  .zipedit input { width: 110px; font: inherit; padding: 8px 10px; border: 2px solid var(--line); border-radius: 8px; }
+
+  /* step 4 */
+  .toggle { display: inline-flex; border: 2px solid var(--ink); border-radius: 10px; overflow: hidden; margin: 6px 0 18px; }
+  .toggle button { font: inherit; font-weight: 700; padding: 10px 18px; border: 0; background: #fff; color: var(--ink); cursor: pointer; }
+  .toggle button.on { background: var(--ink); color: #fff; }
+  .check label { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer; line-height: 1.4; }
+  .check input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--ink); }
+  .check small { display: block; color: var(--muted); }
+  .tips li { margin: 0 0 10px; line-height: 1.5; }
+  .hidden { display: none; }
+
+  footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 24px 0 0; }
+  footer table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  footer td, footer th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  footer th { color: var(--muted); font-weight: 600; }
+
+  @media (max-width: 860px) {
+    header { padding: 0 14px; } header nav a { margin-left: 12px; font-size: .88rem; }
+    main { padding: 0 16px 60px; } h1 { font-size: 1.6rem; }
+    .split { grid-template-columns: 1fr; } .stats { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="#top">Texas Flood Check</a>
+  <nav><a href="#sources">Sources</a><a href="/triage">Emergency triage prototype</a></nav>
+</header>
+<main id="top">
+
+  <section id="s1">
+    <div class="stepnum">Step 1 of 4</div>
+    <h1>What did the flood do to your neighborhood?</h1>
+    <p class="lead">We have aerial photos of <span id="nh">13</span> Texas neighborhoods hit by Hurricane Harvey in 2017 and the Hill Country flood in July 2025. Pick yours, or search your address and we'll find the closest one.</p>
+    <div class="search">
+      <div class="row"><input id="addr" placeholder="Street address or ZIP code" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugg"><button class="btn" id="addrgo" type="button">Search</button></div>
+      <ul class="sugg" id="sugg" role="listbox" hidden></ul>
+    </div>
+    <p class="msg" id="msg"></p>
+    <div id="groups"></div>
+  </section>
+
+  <section id="s2" class="hidden">
+    <div class="stepnum">Step 2 of 4</div>
+    <h2 id="s2title"></h2>
+    <p class="lead" id="s2lead"></p>
+    <div class="split">
+      <div>
+        <div class="compare" id="cmp"><img id="after" alt="After the flood"><img id="before" alt="Before the flood" style="clip-path: inset(0 50% 0 0)"><div class="bar" id="bar"></div><input id="wipe" type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div>
+        <div class="caps"><span id="capb"></span><span>Drag across the photo</span><span id="capa"></span></div>
+        <div class="strip" id="strip"></div>
+        <p class="note" id="stripnote"></p>
+      </div>
+      <div>
+        <h3>What the AI sees in this photo</h3>
+        <div id="chat"></div>
+        <div class="chips">
+          <button data-q="Are any roads under water in the after photo? Which ones, roughly (top, bottom, left, right)?">Are roads under water?</button>
+          <button data-q="Are houses surrounded by water in the after photo? Roughly how many can you see?">Are houses surrounded?</button>
+          <button data-q="If someone lived here during this flood, which direction looks driest to get out? Say what you can't tell.">Which way out looks dry?</button>
+        </div>
+        <form class="ask" id="askform"><input id="askq" placeholder="Ask your own question about this photo"><button class="btn">Ask</button></form>
+        <p class="note">An AI's reading of the photo. Use it as a second opinion, not a fact.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s3" class="hidden">
+    <div class="stepnum">Step 3 of 4</div>
+    <h2>Your neighbors' FEMA records</h2>
+    <p class="lead" id="s3lead"></p>
+    <div id="fema"></div>
+    <div class="zipedit"><span class="muted">Not your ZIP code?</span><input id="zipin" inputmode="numeric" maxlength="5" placeholder="ZIP"><button class="btn ghost" id="zipgo" type="button">Update</button></div>
+  </section>
+
+  <section id="s4" class="hidden">
+    <div class="stepnum">Step 4 of 4</div>
+    <h2>Get ready for the next flood</h2>
+    <p class="lead">Do you rent or own your home? It changes what protects you.</p>
+    <div class="toggle" role="group" aria-label="Rent or own"><button id="rent" class="on">I rent</button><button id="own">I own</button></div>
+    <div class="split">
+      <div><h3>Go-bag checklist</h3><div class="check" id="check"></div><p class="note">Your checks are saved on this device.</p></div>
+      <div><h3>For your neighborhood</h3><p class="muted" id="tipsnote">Tips based on this neighborhood's flood photo and FEMA records.</p>
+        <button class="btn" id="plan">Make my plan</button><ul class="tips" id="tips"></ul></div>
+    </div>
+  </section>
+
+  <footer id="sources">
+    <h3>Sources</h3>
+    <table>
+      <tr><th>What</th><th>From</th></tr>
+      <tr><td>After-flood aerial photos</td><td>NOAA emergency response imagery (storms.ngs.noaa.gov)</td></tr>
+      <tr><td>Before-flood aerial photos (2016)</td><td>USDA National Agriculture Imagery Program</td></tr>
+      <tr><td>Photo collection prepared for this event</td><td>Hugging Face dataset jennifer-fowler/UTSA-flood-images</td></tr>
+      <tr><td>Households that asked FEMA for help, and aid approved</td><td>FEMA, OpenFEMA Housing Assistance data for renters and owners, disasters 4332 (Harvey) and 4879 (July 2025)</td></tr>
+      <tr><td>Reading each photo</td><td>A photo-reading AI model running on the Dell Pro Max GB10 at our table</td></tr>
+      <tr><td>Address search</td><td>OpenStreetMap (Photon and Nominatim)</td></tr>
+    </table>
+  </footer>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const getJSON = async u => { const r = await fetch(u); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Something went wrong.'); return j; };
+const post = async (u, b) => { const r = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Something went wrong.'); return j; };
+const fmtDate = d => d ? new Date(d + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+const km = (a, b, c, d) => { const R = 6371, r = Math.PI / 180, x = Math.sin((c - a) * r / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin((d - b) * r / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
+const money = n => '$' + Math.round(n).toLocaleString('en-US');
+const num = n => Math.round(n).toLocaleString('en-US');
+
+let HOODS = [], hood = null, photo = null, userZip = '', chats = {}, summary = {}, femaData = null, tenure = 'rent';
+
+/* ---------- step 1 ---------- */
+async function init() {
+  HOODS = await getJSON('/api/hoods');
+  const groups = [['harvey', 'Hurricane Harvey, August 2017, Houston area'], ['hill', 'Hill Country flood, July 2025, along the Guadalupe River']];
+  $('#groups').innerHTML = groups.map(([e, t]) => `<div class="group"><h3>${t}</h3><div class="cards">` +
+    HOODS.filter(h => h.event === e).map(h => `<button class="hood" data-n="${esc(h.name)}"><img src="/img/${h.cover}?w=320" alt=""><div><b>${esc(h.name)}</b><span>${esc(h.counties.join(', '))} · ${h.count} photo${h.count === 1 ? '' : 's'}</span></div></button>`).join('') +
+    '</div></div>').join('');
+  document.querySelectorAll('.hood').forEach(b => b.onclick = () => { userZip = ''; $('#msg').textContent = ''; openHood(b.dataset.n); });
+  setupSearch();
+  $('#nh').textContent = HOODS.length;
+  const m = decodeURIComponent(location.hash).match(/^#hood=(.+)$/); if (m) openHood(m[1]);
+}
+
+function setupSearch() {
+  const input = $('#addr'), list = $('#sugg'); let items = [], active = -1, timer, seq = 0;
+  const show = (rows, head) => { items = rows; active = -1;
+    if (!rows.length) { list.hidden = true; input.setAttribute('aria-expanded', 'false'); return; }
+    list.innerHTML = (head ? `<li class="head">${esc(head)}</li>` : '') + rows.map((r, i) => `<li role="option" data-i="${i}">${esc(r.label)}</li>`).join('');
+    list.hidden = false; input.setAttribute('aria-expanded', 'true');
+    list.querySelectorAll('li[data-i]').forEach(li => li.onmousedown = e => { e.preventDefault(); pick(+li.dataset.i); }); };
+  const pick = i => { const r = items[i]; if (!r) return; list.hidden = true; input.value = r.label; useLocation(r); };
+  const full = async () => { const q = input.value.trim(); if (q.length < 3) return; seq++; $('#msg').textContent = 'Searching every address…';
+    try { show(await getJSON('/api/geo?q=' + encodeURIComponent(q)), 'Pick your address'); $('#msg').textContent = ''; } catch (e) { show([]); $('#msg').textContent = e.message; } };
+  input.oninput = () => { clearTimeout(timer); const q = input.value.trim(), my = ++seq; if (q.length < 3) return show([]);
+    timer = setTimeout(async () => { try { const r = await getJSON('/api/suggest?q=' + encodeURIComponent(q)); if (my === seq) show(r); } catch { } }, 300); };
+  input.onkeydown = e => {
+    if (e.key === 'ArrowDown' && items.length) { active = Math.min(items.length - 1, active + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp' && items.length) { active = Math.max(0, active - 1); e.preventDefault(); }
+    else if (e.key === 'Escape') return show([]);
+    else if (e.key === 'Enter') { e.preventDefault(); return active >= 0 ? pick(active) : full(); }
+    else return;
+    list.querySelectorAll('li[data-i]').forEach((li, i) => li.classList.toggle('active', i === active));
+  };
+  input.onblur = () => setTimeout(() => list.hidden = true, 150);
+  $('#addrgo').onclick = full;
+}
+
+function useLocation(r) {
+  const z = (r.label.match(/\b(7\d{4})\b/) || [])[1] || '';
+  const best = HOODS.map(h => ({ h, d: km(r.lat, r.lon, h.lat, h.lon) })).sort((a, b) => a.d - b.d)[0];
+  userZip = best.d <= 25 ? z : '';
+  $('#msg').innerHTML = best.d <= 25
+    ? `Closest neighborhood with photos: <b>${esc(best.h.name)}</b>, ${best.d.toFixed(1)} km from you.${z ? ` We'll use your ZIP code, <b>${z}</b>, for FEMA records.` : ''}`
+    : `We don't have photos near there. The closest neighborhood we have is <b>${esc(best.h.name)}</b>, ${Math.round(best.d)} km away.`;
+  openHood(best.h.name);
+}
+
+/* ---------- step 2 ---------- */
+async function openHood(name) {
+  hood = await getJSON('/api/hood?name=' + encodeURIComponent(name));
+  document.querySelectorAll('.hood').forEach(b => b.classList.toggle('sel', b.dataset.n === name));
+  $('#s2title').textContent = hood.name;
+  $('#s2lead').textContent = `${hood.counties.join(', ')}. ${hood.event_name}. ${hood.count} aerial photo${hood.count === 1 ? '' : 's'} of this area. Pick one below the photo to look at another spot.`;
+  const shown = hood.photos.slice(0, 30);
+  $('#strip').innerHTML = shown.map((p, i) => `<button data-i="${i}" aria-label="Photo ${i + 1}"><img loading="lazy" src="/img/${p.id}?w=128" alt=""></button>`).join('');
+  $('#stripnote').textContent = hood.photos.length > 30 ? `Showing 30 of ${hood.photos.length} photos.` : '';
+  document.querySelectorAll('#strip button').forEach(b => b.onclick = () => openPhoto(shown[+b.dataset.i]));
+  ['#s2', '#s3', '#s4'].forEach(s => $(s).classList.remove('hidden'));
+  openPhoto(shown[0]);
+  $('#s2').scrollIntoView();
+  loadFema();
+}
+
+function openPhoto(p) {
+  photo = p;
+  document.querySelectorAll('#strip button').forEach(b => b.classList.toggle('sel', hood.photos[+b.dataset.i]?.id === p.id));
+  $('#after').src = `/img/${p.id}?w=720`;
+  const hasBefore = !!p.before;
+  $('#before').style.display = hasBefore ? '' : 'none'; $('#bar').style.display = hasBefore ? '' : 'none'; $('#wipe').style.display = hasBefore ? '' : 'none';
+  if (hasBefore) { $('#before').src = `/img/${p.before}?w=720`; $('#wipe').value = 50; $('#before').style.clipPath = 'inset(0 50% 0 0)'; $('#bar').style.left = '50%'; }
+  $('#capb').textContent = hasBefore ? `Before: ${fmtDate(p.before_date)}, ${p.before_source}` : 'No before photo for this spot';
+  $('#capa').textContent = `After: ${fmtDate(p.date)}, ${p.source}`;
+  renderChat();
+  if (!summary[p.id]) describe(p);
+}
+$('#wipe').oninput = e => { $('#before').style.clipPath = `inset(0 ${100 - e.target.value}% 0 0)`; $('#bar').style.left = e.target.value + '%'; };
+
+async function describe(p) {
+  summary[p.id] = { pending: true }; renderChat();
+  try {
+    const q = 'In 3 plain sentences: what does the after photo show compared with before? Start with Yes, No, or Unclear: is floodwater covering normally dry land?';
+    const a = (await post('/api/ask', { id: p.id, question: q, history: [] })).answer;
+    summary[p.id] = { text: a, q };
+  } catch (e) { summary[p.id] = { error: e.message }; }
+  if (photo.id === p.id) renderChat();
+}
+
+function renderChat() {
+  const s = summary[photo.id] || {}, h = chats[photo.id] || [];
+  let html = '';
+  if (s.pending) html = '<div class="bubble ai">Looking at the photo… about 10 seconds.</div>';
+  else if (s.error) html = `<div class="bubble ai">${esc(s.error)} <button class="link" id="retry">Try again</button></div>`;
+  else if (s.text) {
+    const w = s.text.trim().split(/\W/)[0].toLowerCase();
+    const [l, c] = w === 'yes' ? ['Flooded', 'var(--red)'] : w === 'no' ? ['No flooding seen', 'var(--green)'] : ['Unclear', 'var(--amber)'];
+    html = `<span class="verdict" style="background:${c}">${l}</span><div class="bubble ai">${esc(s.text.replace(/^\W*(yes|no|unclear)\W*/i, ''))}</div>`;
+  }
+  html += h.map(m => `<div class="bubble ${m.role === 'user' ? 'me' : 'ai'}">${esc(m.text)}</div>`).join('');
+  $('#chat').innerHTML = html;
+  const r = $('#retry'); if (r) r.onclick = () => describe(photo);
+}
+
+async function ask(q) {
+  const p = photo, h = chats[p.id] = chats[p.id] || [], s = summary[p.id];
+  const history = (s && s.text ? [{ role: 'user', text: s.q }, { role: 'assistant', text: s.text }] : []).concat(h.map(m => ({ role: m.role, text: m.text })));
+  h.push({ role: 'user', text: q }, { role: 'assistant', text: 'Looking… about 10 seconds.' }); renderChat();
+  try { h[h.length - 1].text = (await post('/api/ask', { id: p.id, question: q, history })).answer; } catch (e) { h[h.length - 1].text = e.message; }
+  if (photo.id === p.id) renderChat();
+}
+document.querySelectorAll('.chips button').forEach(b => b.onclick = () => ask(b.dataset.q));
+$('#askform').onsubmit = e => { e.preventDefault(); const q = $('#askq').value.trim(); if (q) { $('#askq').value = ''; ask(q); } };
+
+/* ---------- step 3 ---------- */
+async function loadFema(zip) {
+  const z = zip || userZip;
+  $('#s3lead').textContent = 'Loading FEMA records…'; $('#fema').innerHTML = '';
+  try {
+    const q = z ? `zip=${z}` : `lat=${hood.lat}&lon=${hood.lon}`;
+    const f = femaData = await getJSON(`/api/fema?event=${hood.event}&${q}`);
+    $('#zipin').value = f.zip;
+    const total = f.renters.applied + f.owners.applied;
+    $('#s3lead').innerHTML = total
+      ? `After the ${esc(f.title)}, <b>${num(total)} households</b> in ZIP code <b>${f.zip}</b> asked FEMA for help with their homes. Here's how that splits between renters and owners.`
+      : `FEMA has no housing-help records for ZIP code ${f.zip} for the ${esc(f.title)}. Try a nearby ZIP code.`;
+    $('#fema').innerHTML = total ? `<div class="stats">
+      <div class="stat"><b>${num(f.renters.applied)}</b><span>renter households asked for help</span></div>
+      <div class="stat"><b>${num(f.owners.applied)}</b><span>owner households asked for help</span></div>
+      <div class="stat"><b>${money(f.renters.approved_dollars)}</b><span>approved for renters</span></div>
+      <div class="stat"><b>${money(f.owners.approved_dollars)}</b><span>approved for owners</span></div></div>
+      <p class="note">Source: FEMA's public housing-assistance records for disaster ${f.disaster}. Counts are households that registered with FEMA, not every household affected.</p>` : '';
+  } catch (e) { $('#s3lead').textContent = e.message; }
+}
+$('#zipgo').onclick = () => { const z = $('#zipin').value.trim(); if (/^\d{5}$/.test(z)) loadFema(z); };
+
+/* ---------- step 4 ---------- */
+const CHECK = [
+  ['water', 'Water: 1 gallon per person per day, for 3 days'], ['food', 'Food that needs no cooking, for 3 days'],
+  ['meds', 'Medicines and copies of prescriptions'], ['docs', 'ID, insurance and lease or deed papers in a waterproof bag'],
+  ['power', 'Phone charger and a charged power bank'], ['light', 'Flashlight and spare batteries'],
+  ['cash', 'Some cash, in case card readers are down'], ['plan', 'Where you will go, and how, if you have to leave'],
+  ['pets', 'Food, leash and carrier for pets'],
+];
+const saved = JSON.parse(localStorage.getItem('gobag') || '{}');
+$('#check').innerHTML = CHECK.map(([k, t]) => `<label><input type="checkbox" data-k="${k}" ${saved[k] ? 'checked' : ''}><span>${t}</span></label>`).join('');
+document.querySelectorAll('#check input').forEach(c => c.onchange = () => { saved[c.dataset.k] = c.checked; localStorage.setItem('gobag', JSON.stringify(saved)); });
+const setTenure = t => { tenure = t; $('#rent').classList.toggle('on', t === 'rent'); $('#own').classList.toggle('on', t === 'own'); $('#tips').innerHTML = ''; };
+$('#rent').onclick = () => setTenure('rent'); $('#own').onclick = () => setTenure('own');
+$('#plan').onclick = async () => {
+  const b = $('#plan'); b.disabled = true; $('#tips').innerHTML = '<li>Writing your plan… about 10 seconds.</li>';
+  const s = summary[photo.id] || {}, f = femaData;
+  const femaLine = f ? `${f.renters.applied} renter and ${f.owners.applied} owner households asked FEMA for help after ${f.title}` : '';
+  try {
+    const r = await post('/api/ready', { hood: hood.name, event_name: hood.event_name, tenure, photo_summary: s.text || '', zip: f ? f.zip : '', fema_line: femaLine });
+    $('#tips').innerHTML = r.tips.map(t => `<li>${esc(t)}</li>`).join('');
+  } catch (e) { $('#tips').innerHTML = `<li>${esc(e.message)}</li>`; }
+  b.disabled = false;
+};
+
+init();
+</script>
+</body>
+</html>

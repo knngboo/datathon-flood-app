@@ -519,8 +519,102 @@ async def api_briefing(request):
     return JSONResponse({"answer": answer})
 
 
+# ================= neighborhood app =================
+DISASTER = {"harvey": (4332, "Hurricane Harvey"), "hill": (4879, "July 2025 Hill Country flood")}
+
+
+@lru_cache(maxsize=1)
+def hoods():
+    groups = {}
+    for p in places():
+        g = groups.setdefault(p["place"], {"name": p["place"], "event": p["event"], "event_name": p["event_name"], "counties": set(), "photos": []})
+        if p["county"]:
+            g["counties"].add(p["county"])
+        g["photos"].append(p)
+    out = []
+    for g in groups.values():
+        ph = sorted(g["photos"], key=lambda p: (p["before"] is None, p["id"]))
+        out.append({"name": g["name"], "event": g["event"], "event_name": g["event_name"], "counties": sorted(g["counties"]),
+                    "lat": sum(p["lat"] for p in ph) / len(ph), "lon": sum(p["lon"] for p in ph) / len(ph),
+                    "count": len(ph), "cover": ph[0]["id"],
+                    "photos": [{k: p[k] for k in ("id", "before", "date", "before_date", "source", "before_source", "lat", "lon", "facts")} for p in ph]})
+    return sorted(out, key=lambda h: (h["event"] != "harvey", -h["count"]))
+
+
+async def api_hoods(request):
+    return JSONResponse([{k: v for k, v in h.items() if k != "photos"} for h in hoods()])
+
+
+async def api_hood(request):
+    h = next((x for x in hoods() if x["name"] == request.query_params.get("name")), None)
+    return JSONResponse(h) if h else JSONResponse({"error": "We don't have photos for that neighborhood."}, status_code=404)
+
+
+@lru_cache(maxsize=256)
+def zip_at(lat, lon):
+    url = "https://nominatim.openstreetmap.org/reverse?" + urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "json", "zoom": 16, "addressdetails": 1})
+    req = urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.2 (UTSA datathon demo)"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return (json.loads(r.read()).get("address", {}).get("postcode") or "")[:5]
+
+
+@lru_cache(maxsize=256)
+def fema(zipcode, disaster):
+    out = {}
+    for kind in ("Renters", "Owners"):
+        url = (f"https://www.fema.gov/api/open/v2/HousingAssistance{kind}?" +
+               urllib.parse.urlencode({"$filter": f"disasterNumber eq {disaster} and zipCode eq '{zipcode}'", "$top": 100}))
+        req = urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.2"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            rows = json.loads(r.read()).get(f"HousingAssistance{kind}", [])
+        out[kind.lower()] = {"applied": sum(x.get("validRegistrations") or 0 for x in rows),
+                             "inspected": sum(x.get("totalInspected") or 0 for x in rows),
+                             "approved_people": sum(x.get("approvedForFemaAssistance") or 0 for x in rows),
+                             "approved_dollars": round(sum(x.get("totalApprovedIhpAmount") or 0 for x in rows))}
+    return out
+
+
+async def api_fema(request):
+    q = request.query_params
+    event = q.get("event", "harvey")
+    disaster, title = DISASTER.get(event, DISASTER["harvey"])
+    zipcode = (q.get("zip") or "").strip()[:5]
+    try:
+        if not zipcode:
+            zipcode = await run_in_threadpool(zip_at, round(float(q["lat"]), 4), round(float(q["lon"]), 4))
+        if not zipcode.isdigit():
+            return JSONResponse({"error": "Couldn't work out the ZIP code for this spot."}, status_code=404)
+        data = await run_in_threadpool(fema, zipcode, disaster)
+    except Exception as e:
+        return JSONResponse({"error": f"FEMA's data service didn't answer ({e})."}, status_code=502)
+    return JSONResponse({"zip": zipcode, "disaster": disaster, "title": title, **data})
+
+
+async def api_ready(request: Request):
+    b = await request.json()
+    tenure = "rents their home" if b.get("tenure") == "rent" else "owns their home"
+    facts = (f"Neighborhood: {b.get('hood')}. Flood: {b.get('event_name')}. The person {tenure}. "
+             f"What the aerial photo showed: {str(b.get('photo_summary', 'not checked'))[:400]}. "
+             f"FEMA records for ZIP {b.get('zip')}: {b.get('fema_line', 'not available')}.")
+    try:
+        tips = await run_in_threadpool(ask_ai, [
+            {"role": "system", "content": "You help Texas residents prepare for the next flood. Plain words. Give exactly 4 short tips "
+             "as lines starting with '- ', specific to the facts given (renters vs owners matters: renters need renters insurance "
+             "with flood coverage and their landlord's plan; owners need flood insurance, which usually takes 30 days to start). "
+             "No headings, nothing else."},
+            {"role": "user", "content": facts}], 260)
+    except Exception:
+        return JSONResponse({"error": "The AI didn't answer. Try again."}, status_code=502)
+    return JSONResponse({"tips": [t.strip()[2:].strip() for t in tips.splitlines() if t.strip().startswith("-")][:4] or [tips]})
+
+
+async def home(request):
+    return FileResponse(HERE / "static" / "home.html")
+
+
 app = Starlette(routes=[
-    Route("/", index), Route("/api/places", api_places), Route("/api/find", api_find), Route("/api/geo", api_geo), Route("/api/suggest", api_suggest), Route("/api/reverse", api_reverse),
+    Route("/", home), Route("/triage", index), Route("/api/hoods", api_hoods), Route("/api/hood", api_hood),
+    Route("/api/fema", api_fema), Route("/api/ready", api_ready, methods=["POST"]), Route("/api/places", api_places), Route("/api/find", api_find), Route("/api/geo", api_geo), Route("/api/suggest", api_suggest), Route("/api/reverse", api_reverse),
     Route("/api/request", api_request, methods=["POST"]), Route("/api/requests", api_requests),
     Route("/api/requests/{rid}/status", api_status, methods=["POST"]), Route("/api/requests/samples", api_samples2, methods=["POST"]),
     Route("/api/requests/briefing", api_briefing, methods=["POST"]),
