@@ -234,6 +234,13 @@
       <tr><td>"Who to reach first"</td><td>Turns the open requests and hotspots into a short plan for the crew lead.</td></tr>
     </table>
     <p class="muted" style="margin-top:10px">The AI model (Qwen3-VL-8B) runs on the Dell Pro Max GB10 at our table. The ranking itself is plain, visible math below, so anyone can check it.</p>
+    <h2>How well the photo check works</h2>
+    <p>We tested it on 15 pairs of the organizers' aerial photos: the same spot in 2016, before Hurricane Harvey, and in August 2017, right after it.</p>
+    <div class="htiles" style="max-width:640px;margin:12px 0 6px">
+      <div class="htile"><div class="n">0 of 15</div><div class="l">False alarms</div><div class="s">On 2016 photos with no flood, the AI never claimed flooding.</div></div>
+      <div class="htile"><div class="n">11 of 15</div><div class="l">Floods found</div><div class="s">On Harvey photos it saw flooding in 11, said no in 3 and unclear in 1. Some were taken after the water drained.</div></div>
+    </div>
+    <p class="muted">That is why the photo check is evidence for responders to look at, and why it only adds 2 points to a request.</p>
     <h2>How we keep the AI honest</h2>
     <table>
       <tr><th>Risk</th><th>What the app does</th></tr>

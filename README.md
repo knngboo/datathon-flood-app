@@ -20,6 +20,10 @@ Plain points, visible to anyone: in immediate danger 40, trapped 30, someone inj
 
 Qwen3-VL-8B-Instruct, a model that reads photos and text, runs on the Dell Pro Max GB10 at our table. It writes each resident's reply, reads the aerial photo of the area for floodwater, summarizes decades of FEMA records into a two-sentence historical insight, and turns the open requests and hotspots into a "who to reach first" plan. Every AI-written part has an AI tag on screen.
 
+## How well the photo check works
+
+Tested on 15 pairs of the organizers' aerial photos (same spot, 2016 before Harvey and August 2017 after): 0 false alarms on the 2016 photos; flooding found on 11 of the 15 Harvey photos (3 no, 1 unclear; some were taken after the water drained). Script and results: `eval/`.
+
 ## How we keep the AI honest
 
 - "Call 911 now" for anyone in immediate danger, or trapped with water rising, is fixed text, never AI.

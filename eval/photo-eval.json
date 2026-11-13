@@ -1,0 +1,92 @@
+[
+ {
+  "pair": "TXH_15353_27129_after_20170831_NOAA",
+  "place": "Richmond / Rosenberg / Brazos",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15350_27089_after_20170830_NOAA",
+  "place": "West Houston / Addicks and Barker",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15325_27128_after_20170831_NOAA",
+  "place": "Richmond / Rosenberg / Brazos",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15353_27086_after_20170830_NOAA",
+  "place": "West Houston / Addicks and Barker",
+  "after_2017": "unclear",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15328_27126_after_20170831_NOAA",
+  "place": "Richmond / Rosenberg / Brazos",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15346_27086_after_20170830_NOAA",
+  "place": "West Houston / Addicks and Barker",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15439_27034_after_20170831_NOAA",
+  "place": "Forest Cove / Kingwood",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15354_27091_after_20170830_NOAA",
+  "place": "West Houston / Addicks and Barker",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15291_27105_after_20170903_NOAA",
+  "place": "Simonton / Brazos",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15437_27030_after_20170831_NOAA",
+  "place": "Forest Cove / Kingwood",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15367_27137_after_20170831_NOAA",
+  "place": "Richmond / Rosenberg / Brazos",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15363_27139_after_20170831_NOAA",
+  "place": "Richmond / Rosenberg / Brazos",
+  "after_2017": "yes",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15360_27077_after_20170830_NOAA",
+  "place": "West Houston / Addicks and Barker",
+  "after_2017": "no",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15355_27075_after_20170830_NOAA",
+  "place": "West Houston / Addicks and Barker",
+  "after_2017": "no",
+  "before_2016": "no"
+ },
+ {
+  "pair": "TXH_15289_27106_after_20170903_NOAA",
+  "place": "Simonton / Brazos",
+  "after_2017": "no",
+  "before_2016": "no"
+ }
+]
