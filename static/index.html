@@ -19,6 +19,8 @@
   .brand { font-weight: 800; font-size: 1.15rem; color: var(--ink); text-decoration: none; }
   nav a { margin-left: 22px; color: var(--muted); text-decoration: none; font-weight: 600; padding: 18px 2px 15px; border-bottom: 3px solid transparent; }
   nav a.on { color: var(--ink); border-bottom-color: var(--ink); }
+  nav a.navcta { background: var(--critical); color: #fff; padding: 8px 16px; border-radius: 999px; border: 0; }
+  nav a.navcta.on { box-shadow: 0 0 0 3px #FECACA; color: #fff; }
   .view { display: none; } .view.on { display: block; }
   .btn { font: inherit; font-weight: 700; background: var(--ink); color: #fff; border: 2px solid var(--ink); border-radius: 10px; padding: 12px 18px; cursor: pointer; }
   .btn.ghost { background: #fff; color: var(--ink); }
@@ -68,6 +70,7 @@
   .result .pos { font-size: 1.05rem; margin: 0 0 6px; }
   .result h3 { margin: 18px 0 6px; font-size: 1rem; color: var(--ink); }
   .result p { line-height: 1.55; margin: 0; }
+  .ai { display: inline-block; background: #6D28D9; color: #fff; font-size: .72rem; font-weight: 800; letter-spacing: .02em; padding: 2px 7px; border-radius: 5px; margin-right: 6px; vertical-align: 1px; }
   .bubble-ai { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 14px 0 4px; }
 
   /* responders */
@@ -99,11 +102,11 @@
   .answers .yes { color: var(--critical); font-weight: 800; }
   .answers .unsure { color: var(--medium); font-weight: 800; }
   .why { background: var(--wash); border-radius: 10px; padding: 10px 12px; margin: 12px 0; line-height: 1.5; font-size: .95rem; }
-  .compare { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1 / 1; max-height: 260px; background: var(--wash); }
+  .compare { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1 / 1; width: 100%; max-width: 400px; background: var(--wash); }
   .compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .compare .bar { position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: #fff; box-shadow: 0 0 0 1px rgba(19,41,75,.35); pointer-events: none; }
   .compare input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; }
-  .caps { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin: 6px 0 10px; }
+  .caps { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin: 6px 0 10px; max-width: 400px; }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
   .empty { padding: 30px 18px; color: var(--muted); text-align: center; }
 
@@ -129,11 +132,11 @@
 <body>
 <header>
   <a class="brand" href="#help">Texas Flood Check</a>
-  <nav><a href="#help" data-v="help">Report damage</a><a href="#responders" data-v="responders">Recovery teams</a><a href="#about" data-v="about">How it works</a></nav>
+  <nav><a href="#help" data-v="help" class="navcta">Get help</a><a href="#responders" data-v="responders">Responders</a><a href="#about" data-v="about">How it works</a></nav>
 </header>
 
 <section class="view" id="view-help">
-  <div class="alert911"><span>This is for after the water goes down. In danger right now? Call 911.</span><a href="tel:911">Call 911</a></div>
+  <div class="alert911"><span>In danger right now? Call 911 first.</span><a href="tel:911">Call 911</a></div>
   <div class="wizard">
     <div class="progress"><div id="prog"></div></div>
     <div class="stepcount"><span id="stepno"></span><button id="back" type="button">Back</button></div>
@@ -146,12 +149,12 @@
     <div class="queue">
       <div class="queuehead">
         <div class="counts" id="counts"></div>
-        <div class="qbtns"><button class="btn" id="briefbtn">Where to send teams first</button><button class="btn ghost" id="samplebtn">Load demo reports</button></div>
+        <div class="qbtns"><button class="btn" id="briefbtn"><span class="ai" style="background:#fff;color:#6D28D9">AI</span>Who to reach first</button><button class="btn ghost" id="samplebtn" hidden>Reset demo</button></div>
         <div class="why" id="brief" hidden></div>
       </div>
       <div id="cards"></div>
     </div>
-    <div class="side"><div id="opsmap"></div><div class="detail" id="detail"><p class="muted">Select a report to see why it's ranked there.</p></div></div>
+    <div class="side"><div id="opsmap"></div><div class="detail" id="detail"><p class="muted">Select a request to see why it's ranked there.</p></div></div>
   </div>
 </section>
 
@@ -176,44 +179,41 @@
 <section class="view" id="view-about">
   <div class="doc">
     <h1>How Texas Flood Check works</h1>
-    <p>After a flood, the hardest part for a recovery team is knowing which homes need help first, and which reports are real. Residents report damage at their address in a few taps. Our AI checks each report against the aerial photo NOAA took of that spot after the flood. Recovery teams see every report on a map, ranked, with the photo proof next to it. Residents get a case number and the FEMA help they can apply for.</p>
+    <p>During a flash flood, people tell us where they are and answer six yes-or-no questions. Each request gets a priority, so responders reach the people in the most danger first. An area's flood history counts, but it never outranks someone who says they're in danger right now.</p>
     <h2>Where the AI is used</h2>
     <table>
-      <tr><th>What</th><th>Why it needs AI</th></tr>
-      <tr><td>Checking each report against the aerial photo of that spot</td><td>Reading a photo for floodwater and damage is something only a vision model can do. Our model (Qwen3-VL-8B) runs on the Dell Pro Max GB10 at our table.</td></tr>
-      <tr><td>"Where to send teams first" summary</td><td>Turns a long list into a short plan a team lead can read in seconds.</td></tr>
+      <tr><th>What (look for the <span class="ai">AI</span> tag on screen)</th><th>Why it needs AI</th></tr>
+      <tr><td>A calm reply telling each person what to do while they wait</td><td>Every situation is different; the reply is written from their own answers.</td></tr>
+      <tr><td>Reading the aerial photo of the area from a past flood</td><td>Only a vision model can tell whether a photo shows floodwater over streets and homes.</td></tr>
+      <tr><td>The Flood Frequency &amp; Severity summary</td><td>Turns decades of FEMA records into two sentences a responder can read in seconds.</td></tr>
+      <tr><td>"Who to reach first"</td><td>Turns a long list into a short plan for the crew lead.</td></tr>
     </table>
-    <p class="muted" style="margin-top:10px">Everything else is plain code: the ranking points below, the map, and the FEMA lists.</p>
-    <h2>How a report is ranked</h2>
+    <p class="muted" style="margin-top:10px">The AI model (Qwen3-VL-8B) runs on the Dell Pro Max GB10 at our table. The ranking itself is plain, visible math below, so anyone can check it.</p>
+    <h2>How a request is ranked</h2>
     <table>
-      <tr><th>What the resident tells us</th><th>Points</th></tr>
-      <tr><td>Water got inside (not sure: 15)</td><td>30</td></tr>
-      <tr><td>How deep: ankle / knee / waist or higher</td><td>10 / 20 / 35</td></tr>
-      <tr><td>Can't stay home tonight (not sure: 12)</td><td>25</td></tr>
-      <tr><td>Elderly, disabled or a baby at home</td><td>15</td></tr>
-      <tr><td>Needs a place to stay</td><td>15</td></tr>
-      <tr><td>Each extra person, up to 4</td><td>2 each</td></tr>
-      <tr><td>Aerial photo confirms flooding / shows none</td><td>+15 / -10</td></tr>
+      <tr><th>What the person tells us</th><th>Yes</th><th>Not sure</th></tr>
+      <tr><td>In immediate danger</td><td>40</td><td>20</td></tr>
+      <tr><td>Trapped</td><td>30</td><td>15</td></tr>
+      <tr><td>Someone is injured</td><td>25</td><td>12</td></tr>
+      <tr><td>Water is rising</td><td>15</td><td>8</td></tr>
+      <tr><td>Can't leave safely (answered No)</td><td>15</td><td>8</td></tr>
+      <tr><td>Someone elderly or disabled</td><td>10</td><td>5</td></tr>
+      <tr><td>Each extra person, up to 4</td><td colspan="2">2 each</td></tr>
+      <tr><td>Flood history: frequent FEMA flood disasters in the county, and how many households needed help</td><td colspan="2">up to 10</td></tr>
+      <tr><td>Aerial photo shows the area flooded before</td><td colspan="2">3</td></tr>
     </table>
-    <p class="muted" style="margin-top:10px">Urgent: 70 and up. High: 45 and up. Medium: 20 and up. Low: below 20. A report the photo contradicts isn't thrown out; it's marked "check first."</p>
+    <p class="muted" style="margin-top:10px">Critical: in immediate danger, or trapped with water rising, or 60 points and up. High: 35 and up. Medium: 15 and up. Low: below 15.</p>
     <h2>Where the data comes from</h2>
     <table>
       <tr><th>Data</th><th>Source</th></tr>
-      <tr><td>Aerial photos after the flood</td><td><a href="https://storms.ngs.noaa.gov/" target="_blank">NOAA emergency response imagery</a> (Harvey 2017, Hill Country 2025)</td></tr>
-      <tr><td>Aerial photos before the flood</td><td>USDA National Agriculture Imagery Program (2016)</td></tr>
+      <tr><td>Flood disasters by county since 1953</td><td>FEMA disaster declarations (OpenFEMA)</td></tr>
+      <tr><td>Households that asked for help, by ZIP code</td><td>FEMA housing assistance records (OpenFEMA)</td></tr>
+      <tr><td>Aerial photos after past floods</td><td><a href="https://storms.ngs.noaa.gov/" target="_blank">NOAA emergency response imagery</a> (Harvey 2017, Hill Country 2025)</td></tr>
+      <tr><td>Aerial photos before Harvey</td><td>USDA National Agriculture Imagery Program (2016)</td></tr>
       <tr><td>Photo collection for this event</td><td>Organizers' <a href="https://huggingface.co/datasets/jennifer-fowler/UTSA-flood-images" target="_blank">Hugging Face dataset</a></td></tr>
-      <tr><td>Households that asked FEMA for help, by ZIP code</td><td>FEMA OpenFEMA housing assistance records (disasters 4332 and 4879)</td></tr>
-      <tr><td>The help residents can apply for</td><td>FEMA Individuals and Households Program, DisasterAssistance.gov</td></tr>
-      <tr><td>Addresses and street names</td><td>OpenStreetMap</td></tr>
-      <tr><td>Reports</td><td>Saved as one line each in a file on the Dell. No database, because a one-day demo doesn't need one.</td></tr>
+      <tr><td>Addresses, street names and counties</td><td>OpenStreetMap</td></tr>
+      <tr><td>Requests</td><td>Saved as one line each in a file on the Dell. No database, because a one-day prototype doesn't need one.</td></tr>
     </table>
-    <h2>What it can't do</h2>
-    <div class="limits">
-      <div>It's a student prototype, not a real FEMA or county system. In danger, call 911.</div>
-      <div>The photos are from past floods, so the demo replays Hurricane Harvey as if it just happened.</div>
-      <div>The AI's photo check is evidence for the team to look at, not a decision.</div>
-      <div>A river, pond or pool can look like flooding from the air.</div>
-    </div>
   </div>
 </section>
 
@@ -223,8 +223,8 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
 const ATTR = 'Esri, OpenStreetMap contributors';
-const LVL = { Urgent: '#B91C1C', High: '#C2410C', Medium: '#A16207', Low: '#15803D' };
-const ST = { 'New': '#4B5563', 'Team assigned': '#1D4ED8', 'Done': '#15803D' };
+const LVL = { Critical: '#B91C1C', High: '#C2410C', Medium: '#A16207', Low: '#15803D' };
+const ST = { 'New': '#4B5563', 'On the way': '#1D4ED8', 'Resolved': '#15803D' };
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Something went wrong. Try again.'); return j;
@@ -233,7 +233,7 @@ const getJSON = async url => { const r = await fetch(url); const j = await r.jso
 
 function route() {
   if (location.hash === '#team') { localStorage.team = '1'; location.hash = '#feedback'; return; }
-  $('#fbbtn').hidden = localStorage.team !== '1';
+  $('#fbbtn').hidden = localStorage.team !== '1'; $('#samplebtn').hidden = localStorage.team !== '1';
   const v = ['help', 'responders', 'about', 'feedback'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'help';
   document.querySelectorAll('nav a').forEach(a => a.classList.toggle('on', a.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'view-' + v));
@@ -247,12 +247,12 @@ window.addEventListener('hashchange', route);
 /* ================= GET HELP ================= */
 const YN = [['yes', 'Yes'], ['no', 'No'], ['unsure', 'Not sure']];
 const QUESTIONS = [
-  ['water_inside', 'Did floodwater get inside your home?', 'Pick one.', YN],
-  ['depth', 'How deep did the water get inside?', 'Your best guess is fine.', [['ankle', 'Ankle deep (under 1 foot)'], ['knee', 'Knee deep (1 to 3 feet)'], ['waist', 'Waist deep or higher (over 3 feet)'], ['unsure', 'Not sure']]],
-  ['stay', 'Can you safely stay in your home tonight?', 'Think power, water, mold and a dry place to sleep.', YN],
-  ['need', 'What do you need most right now?', 'Pick the one that matters most.', [['stay', 'A place to stay'], ['cleanup', 'Help cleaning out the house'], ['repairs', 'Repairs'], ['supplies', 'Food, water or medicine'], ['none', 'Nothing right now']]],
-  ['vulnerable', 'Is anyone in your home elderly, disabled, or a baby?', '', [['yes', 'Yes'], ['no', 'No']]],
-  ['tenure', 'Do you rent or own your home?', 'This decides which help you can apply for.', [['rent', 'I rent'], ['own', 'I own']]],
+  ['danger', 'Are you in immediate danger?', 'Examples: flooded home, submerged vehicle, no safe shelter.', YN],
+  ['rising', 'Is the water rising where you are?', '', YN],
+  ['trapped', 'Are you trapped?', 'Examples: water or debris blocking every way out.', YN],
+  ['injured', 'Is anyone with you injured?', '', YN],
+  ['evacuate', 'Can you leave safely on your own?', 'Only yes if the way out has no moving water.', YN],
+  ['vulnerable', 'Is anyone with you elderly or disabled?', 'Or a baby, or anyone who needs help moving.', YN],
 ];
 const LABEL = Object.fromEntries(QUESTIONS.map(([k, , , o]) => [k, Object.fromEntries(o)]));
 const S = { step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, done: null };
@@ -261,7 +261,7 @@ let pinmap, pickmap, pin;
 
 function renderStep() {
   $('#prog').style.width = (S.done ? 100 : (S.step / TOTAL) * 100) + '%';
-  $('#stepno').textContent = S.done ? 'Report sent' : `Step ${S.step + 1} of ${TOTAL}, about a minute`;
+  $('#stepno').textContent = S.done ? 'Request sent' : S.step === 0 ? 'First, your location' : S.step <= QUESTIONS.length ? `Question ${S.step} of ${QUESTIONS.length}` : S.step === QUESTIONS.length + 1 ? 'Almost done' : 'Last step: review';
   $('#back').style.visibility = S.step > 0 && !S.done ? 'visible' : 'hidden';
   const box = $('#step');
   if (S.done) return renderDone(box);
@@ -353,50 +353,43 @@ function showChosen() {
 }
 
 function renderPeople(box) {
-  box.innerHTML = `<h1 class="q">How many people live in your home?</h1><p class="hint">Count yourself too.</p>
+  box.innerHTML = `<h1 class="q">How many people are with you?</h1><p class="hint">Count yourself too.</p>
     <div class="stepper"><button type="button" id="minus" aria-label="Fewer people">−</button><span id="ppl">${S.people}</span><button type="button" id="plus" aria-label="More people">+</button></div>
     <label class="field">Your first name (optional)<input id="nm" autocomplete="given-name" value="${esc(S.name || '')}"></label>
-    <label class="field">Phone number so a team can reach you (optional)<input id="ph" type="tel" autocomplete="tel" value="${esc(S.phone || '')}"></label>
-    <button class="btn" id="toreview" style="width:100%">Review my report</button>`;
+    <label class="field">Phone number so responders can reach you (optional)<input id="ph" type="tel" autocomplete="tel" value="${esc(S.phone || '')}"></label>
+    <button class="btn" id="toreview" style="width:100%">Review my request</button>`;
   $('#minus').onclick = () => { S.people = Math.max(1, S.people - 1); $('#ppl').textContent = S.people; };
   $('#plus').onclick = () => { S.people = Math.min(50, S.people + 1); $('#ppl').textContent = S.people; };
   $('#toreview').onclick = () => { S.name = $('#nm').value.trim(); S.phone = $('#ph').value.trim(); S.step++; renderStep(); };
 }
 
 function renderReview(box) {
-  const rows = [['Address', S.label]].concat(QUESTIONS.filter(([k]) => S.answers[k]).map(([k, q]) => [q, LABEL[k][S.answers[k]]]))
-    .concat([['People in the home', S.people], ['Name', S.name || 'not given'], ['Phone', S.phone || 'not given']]);
-  box.innerHTML = `<h1 class="q">Check your report</h1><p class="hint">Nothing is sent until you press Send.</p>
+  const rows = [['Location', S.label]].concat(QUESTIONS.filter(([k]) => S.answers[k]).map(([k, q]) => [q, LABEL[k][S.answers[k]]]))
+    .concat([['People with you', S.people], ['Name', S.name || 'not given'], ['Phone', S.phone || 'not given']]);
+  box.innerHTML = `<h1 class="q">Check your request</h1><p class="hint">Nothing is sent until you press Send.</p>
     <div class="answers" style="margin-bottom:22px">${rows.map(([q, a]) => `<span class="muted">${esc(q)}</span><b>${esc(a)}</b>`).join('')}</div>
-    <button class="btn send" id="sendbtn">Send report</button>
-    <p style="margin-top:12px"><button class="link" id="fix" type="button" style="font:inherit;background:none;border:0;color:var(--ink);font-weight:700;text-decoration:underline;cursor:pointer">Change my answers</button></p>
+    <button class="btn send" id="sendbtn">Send for help</button>
+    <p style="margin-top:12px"><button id="fix" type="button" style="font:inherit;background:none;border:0;color:var(--ink);font-weight:700;text-decoration:underline;cursor:pointer;padding:0">Change my answers</button></p>
     <p class="hint" id="senderr"></p>`;
   $('#fix').onclick = () => { S.step = 1; renderStep(); };
   $('#sendbtn').onclick = async () => {
-    $('#sendbtn').disabled = true; $('#sendbtn').textContent = 'Sending, checking the aerial photo and writing your reply… about 15 seconds';
+    $('#sendbtn').disabled = true; $('#sendbtn').textContent = 'Sending… about 10 seconds';
     try {
       S.done = await post('/api/request', { lat: S.lat, lon: S.lon, label: S.label, answers: S.answers, people: S.people, name: S.name, phone: S.phone });
       renderStep();
-    } catch (e) { $('#senderr').textContent = e.message; $('#sendbtn').disabled = false; $('#sendbtn').textContent = 'Send report'; }
+    } catch (e) { $('#senderr').textContent = e.message; $('#sendbtn').disabled = false; $('#sendbtn').textContent = 'Send for help'; }
   };
 }
 
 function renderDone(box) {
   const d = S.done, c = LVL[d.level];
-  const v = d.verdict === 'Yes' ? ['Flooding seen', 'var(--critical)'] : d.verdict === 'No' ? ['No flooding seen', 'var(--low)'] : d.verdict ? ['Unclear', 'var(--medium)'] : null;
   box.innerHTML = `<div class="result" style="border-left-color:${c}">
-      <h2>${d.updated ? 'Report updated' : 'Report received'}: case ${d.id}</h2>
-      ${d.updated ? '<p class="muted">You already reported this address, so we updated that report instead of making a new one.</p>' : ''}
-      <div class="bubble-ai"><p>${esc(d.reply)}</p><p class="muted" style="font-size:.82rem;margin-top:6px">Written by our AI from your answers.</p></div>
-      <h3>Help you can apply for</h3><ul style="margin:0;padding-left:20px;line-height:1.6">${d.help.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
-      <p style="margin-top:12px">Apply at <a href="https://www.disasterassistance.gov" target="_blank"><b>DisasterAssistance.gov</b></a> or call FEMA at <a href="tel:18006213362" style="white-space:nowrap"><b>1-800-621-3362</b></a>.</p>
-      <details style="margin-top:16px"><summary style="cursor:pointer;font-weight:700;color:var(--ink)">What the recovery team sees</summary>
-        <p style="margin-top:8px">Priority <b style="color:${c}">${d.level}</b>, number ${d.position} on their list.</p>
-        ${v ? `<p style="margin-top:6px"><span class="status" style="background:${v[1]}">${v[0]}</span> ${esc(d.verdict_text)} <span class="muted">(AI check of NOAA's aerial photo of ${esc(d.photo_place)}, ${d.photo_km} km away)</span></p>`
-            : '<p class="muted" style="margin-top:6px">No aerial photo within 3 km of this address, so a team will check in person.</p>'}
-      </details>
+      <h2>${d.updated ? 'Request updated' : 'Help request sent'}: case ${d.id}</h2>
+      ${d.updated ? '<p class="muted">You already asked for help from this spot, so we updated that request instead of making a new one.</p>' : ''}
+      <div class="bubble-ai"><p><span class="ai" title="Written by the AI model on our Dell">AI</span>${esc(d.reply)}</p><p class="muted" style="font-size:.82rem;margin-top:6px">Written by our AI from your answers.</p></div>
+      <p style="margin-top:12px">Responders see your request as <b style="color:${c}">${d.level}</b> priority, number <b>${d.position}</b> on their list. If anything gets worse, send a new request or call 911.</p>
     </div>
-    <p style="margin-top:18px"><button class="btn ghost" id="again">Report a different home</button></p>`;
+    <p style="margin-top:18px"><button class="btn ghost" id="again">Send a new request</button></p>`;
   $('#again').onclick = () => { Object.assign(S, { step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, name: '', phone: '', done: null }); pinmap = null; pickmap = null; renderStep(); };
 }
 
@@ -410,22 +403,23 @@ async function openOps() {
 }
 async function loadRows(fit) {
   ROWS = await getJSON('/api/requests');
-  const open = ROWS.filter(r => r.status !== 'Done'), n = f => open.filter(f).length;
-  $('#counts').innerHTML = [['Open', open.length, '#13294B'], ['Urgent', n(r => r.level === 'Urgent'), LVL.Urgent], ['High', n(r => r.level === 'High'), LVL.High], ['Team assigned', n(r => r.status === 'Team assigned'), ST['Team assigned']]]
+  const open = ROWS.filter(r => r.status !== 'Resolved'), n = f => open.filter(f).length;
+  $('#counts').innerHTML = [['Open', open.length, '#13294B'], ['Critical', n(r => r.level === 'Critical'), LVL.Critical], ['High', n(r => r.level === 'High'), LVL.High], ['On the way', n(r => r.status === 'On the way'), ST['On the way']]]
     .map(([l, v, c]) => `<div class="count"><b style="color:${c}">${v}</b><span>${l}</span></div>`).join('');
-  $('#cards').innerHTML = ROWS.length ? ROWS.map(card).join('') : '<div class="empty">No reports yet. Send one from Report damage, or load demo reports.</div>';
+  $('#cards').innerHTML = ROWS.length ? ROWS.map(card).join('') : '<div class="empty">No requests right now.</div>';
   document.querySelectorAll('.card').forEach(el => el.onclick = () => selectReq(el.dataset.id, true));
   Object.values(markers).forEach(m => m.remove()); markers = {};
-  ROWS.forEach(r => { const done = r.status === 'Done';
+  ROWS.forEach(r => { const done = r.status === 'Resolved';
     markers[r.id] = L.circleMarker([r.lat, r.lon], { radius: done ? 6 : 10, weight: 3, color: '#fff', fillColor: done ? '#9CA3AF' : LVL[r.level], fillOpacity: 1 })
-      .bindTooltip(`${r.id}: ${r.level}${done ? ' (done)' : ''}`).on('click', () => selectReq(r.id, false)).addTo(opsmap); });
+      .bindTooltip(`${r.id}: ${r.level}${done ? ' (resolved)' : ''}`).on('click', () => selectReq(r.id, false)).addTo(opsmap); });
+  $('#briefbtn').disabled = !open.length;
   if (fit && ROWS.length) opsmap.fitBounds(ROWS.map(r => [r.lat, r.lon]), { padding: [40, 40], maxZoom: 12 });
   if (!selId && ROWS.length) selId = ROWS[0].id;
   if (selId && ROWS.find(r => r.id === selId)) selectReq(selId, false);
 }
 function card(r) {
   const flags = r.why.map(w => `<span class="flag">${esc(w)}</span>`).join('') + `<span class="flag">${r.people} ${r.people === 1 ? 'person' : 'people'}</span>`;
-  return `<div class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Done' ? 'done' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
+  return `<div class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Resolved' ? 'done' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
     <div class="cardtop"><span class="lvl" style="color:${LVL[r.level]}">${r.level}</span><span class="status" style="background:${ST[r.status]}">${r.status}</span></div>
     <div class="meta">${r.id}, sent ${esc(r.time)}${r.name ? ', ' + esc(r.name) : ''}${r.sample ? ', demo' : ''}</div>
     <div class="where">${esc(r.label)}</div><div class="flags">${flags}</div></div>`;
@@ -434,43 +428,63 @@ function selectReq(id, fly) {
   selId = id; const r = ROWS.find(x => x.id === id); if (!r) return;
   document.querySelectorAll('.card').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
   if (fly) opsmap.setView([r.lat, r.lon], 13);
-  const ans = QUESTIONS.filter(([k]) => r.answers[k]).map(([k, q]) => `<span>${esc(q)}</span><b>${esc(LABEL[k][r.answers[k]] || r.answers[k])}</b>`).join('');
+  const badAns = (k, a) => k === 'evacuate' ? (a === 'no' ? 'yes' : a) : a;
+  const ans = QUESTIONS.map(([k, q]) => `<span>${esc(q)}</span><b class="${badAns(k, r.answers[k])}">${esc(LABEL[k][r.answers[k]] || '—')}</b>`).join('');
   const h = r.history, p = PLACES && PLACES.find(x => x.id === h.id), near = p && h.km <= 3;
   const yr = d => esc(String(d).slice(0, 4));
-  const v = r.verdict === 'Yes' ? ['Flooding seen', LVL.Urgent] : r.verdict === 'No' ? ['No flooding seen', LVL.Low] : r.verdict ? ['Unclear', LVL.Medium] : null;
+  const v = r.verdict === 'Yes' ? ['Flooded then', LVL.Critical] : r.verdict === 'No' ? ['No flooding seen', LVL.Low] : r.verdict ? ['Unclear', LVL.Medium] : null;
   const photo = near ? (p.before
       ? `<div class="compare" id="cmp"><img src="/img/${p.id}?w=520" alt="After the flood"><img class="before" src="/img/${p.before}?w=520" alt="Before the flood" style="clip-path:inset(0 50% 0 0)"><div class="bar"></div><input type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div><div class="caps"><span>Before, ${yr(p.before_date)} (USDA)</span><span>Drag to compare</span><span>After, ${yr(p.date)} (NOAA)</span></div>`
       : `<div class="compare"><img src="/img/${p.id}?w=520" alt="After the flood"></div><div class="caps"><span>After, ${yr(p.date)} (NOAA)</span></div>`)
-      + (v ? `<div class="why"><span class="status" style="background:${v[1]}">AI photo check: ${v[0]}</span> ${esc(r.verdict_text)}</div>` : '')
-    : '<p class="muted">No aerial photo within 3 km of this address. Check in person.</p>';
-  const actions = [['New', 'Mark new'], ['Team assigned', 'Assign a team'], ['Done', 'Mark done']].filter(([s]) => s !== r.status)
+      + (v ? `<div class="why"><span class="ai" title="The AI model looked at this photo">AI</span><span class="status" style="background:${v[1]}">Photo check: ${v[0]}</span> ${esc(r.verdict_text)}</div>` : '')
+    : `<p class="muted">No aerial photo from a past flood within 3 km of this request. We only have aerial photos of 13 neighborhoods (${esc(h.place)} is the closest, ${Math.round(h.km)} km away).</p>`;
+  const actions = [['On the way', 'Mark on the way'], ['Resolved', 'Mark resolved'], ['New', 'Reopen']].filter(([s]) => s !== r.status && !(s === 'New' && r.status === 'New'))
     .map(([s, l], i) => `<button class="btn ${i ? 'ghost' : ''}" data-s="${s}">${l}</button>`).join('');
   $('#detail').innerHTML = `<h2>${r.id}: <span style="color:${LVL[r.level]}">${r.level}</span> <span class="muted" style="font-weight:500;font-size:1rem">${r.score} points</span></h2>
     <div class="meta">Sent ${esc(r.time)}. ${esc(r.label)}. ${r.people} ${r.people === 1 ? 'person' : 'people'}${r.phone ? '. Phone ' + esc(r.phone) : ''}${r.name ? '. ' + esc(r.name) : ''}.</div>
+    <div class="actions" style="margin:12px 0 4px">${actions}</div>
     <div class="dgrid"><div>
-      <div class="why"><b>Why it's ranked here:</b> ${esc(r.why.map((w, i) => i ? w[0].toLowerCase() + w.slice(1) : w).join(', ') || 'no damage reported')}.</div>
+      <div class="why"><b>Why it's ranked here:</b> ${esc(r.why.map((w, i) => i ? w[0].toLowerCase() + w.slice(1) : w).join(', ') || 'no urgent answers')}.</div>
       <div class="answers">${ans}</div>
-      <div class="why" id="femaline" style="margin-top:14px">Loading FEMA records for this ZIP code…</div>
-      <div class="actions">${actions}</div>
-    </div><div><b style="color:var(--ink)">Aerial photo of this address</b>${near ? `<div class="meta" style="margin:2px 0 8px">${esc(p.place)}, ${h.km} km away</div>` : ''}${photo}</div></div>`;
+      <h3 style="color:var(--ink);margin:20px 0 6px">Flood Frequency &amp; Severity Report</h3>
+      <div id="hist"><p class="muted">Loading FEMA's records for this area…</p></div>
+    </div><div><b style="color:var(--ink)">Aerial photo of this area from a past flood</b>${near ? `<div class="meta" style="margin:2px 0 8px">${esc(p.place)}, ${h.km} km away</div>` : ''}${photo}</div></div>`;
   document.querySelectorAll('.actions button').forEach(b => b.onclick = async () => { await post(`/api/requests/${r.id}/status`, { status: b.dataset.s }); loadRows(false); });
   const cmp = $('#cmp'); if (cmp) { const s = cmp.querySelector('input'); s.oninput = () => { cmp.querySelector('.before').style.clipPath = `inset(0 ${100 - s.value}% 0 0)`; cmp.querySelector('.bar').style.left = s.value + '%'; }; }
-  if (h.km > 25) { $('#femaline').textContent = 'No FEMA records loaded for this area: it is outside the two floods we have data for.'; return; }
-  getJSON(`/api/fema?event=${h.event_key || 'harvey'}&lat=${r.lat}&lon=${r.lon}`).then(f => {
-    if (selId !== id) return;
-    const t = f.renters.applied + f.owners.applied;
-    $('#femaline').innerHTML = t ? `FEMA records, ZIP ${f.zip}, ${esc(f.title)}: <b>${t.toLocaleString()}</b> households asked for help (${f.renters.applied.toLocaleString()} renters, ${f.owners.applied.toLocaleString()} owners).` : `FEMA has no housing-help records for ZIP ${f.zip}.`;
-  }).catch(e => { if (selId === id) $('#femaline').textContent = 'FEMA records unavailable right now.'; });
+  getJSON(`/api/history?lat=${r.lat}&lon=${r.lon}`).then(f => { if (selId === id) $('#hist').innerHTML = histReport(f); })
+    .catch(e => { if (selId === id) $('#hist').innerHTML = `<p class="muted">${esc(e.message)}</p>`; });
 }
-$('#samplebtn').onclick = async () => { $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
+
+function histReport(f) {
+  if (!f.total) return `<p class="muted">FEMA has no flood-type disaster declarations on record for ${esc(f.county)} County.</p>`;
+  const dec = Object.entries(f.decades), max = Math.max(...dec.map(([, n]) => n));
+  const bars = dec.map(([d, n]) => `<div style="display:flex;align-items:center;gap:8px;font-size:.85rem"><span style="width:46px" class="muted">${d}</span><div style="height:14px;width:${Math.max(4, n / max * 100)}%;max-width:70%;background:var(--ink);border-radius:3px"></div><b>${n}</b></div>`).join('');
+  const sevMax = Math.max(1, ...f.severity.map(x => x.households));
+  const sev = f.severity.length ? `<div class="muted" style="font-size:.85rem;margin:14px 0 6px">How bad it got in ZIP ${esc(f.zip)}: households that asked FEMA for help</div>` +
+    f.severity.map(x => `<div style="display:flex;align-items:center;gap:8px;font-size:.85rem;margin:3px 0"><span style="width:150px">${esc(x.title.length > 24 ? 'Storms and flooding' : x.title)} ${x.year}</span><div style="height:14px;width:${Math.max(3, x.households / sevMax * 100)}%;max-width:45%;background:var(--critical);border-radius:3px"></div><b>${x.households.toLocaleString()}</b></div>`).join('')
+    : `<p class="muted" style="font-size:.85rem;margin-top:12px">No FEMA household records for ZIP ${esc(f.zip)} in recent floods.</p>`;
+  return `${f.summary ? `<div class="why" style="margin-top:0"><span class="ai" title="Written by the AI model from FEMA's records">AI</span>${esc(f.summary)}<div class="muted" style="font-size:.78rem;margin-top:4px">Summary written by our AI from FEMA's records below.</div></div>` : ''}
+    <div style="display:flex;gap:18px;margin:6px 0 12px"><div><b style="font-size:1.6rem;color:var(--ink)">${f.total}</b><div class="muted" style="font-size:.85rem">flood disasters in ${esc(f.county)} County since ${f.since}</div></div>
+    <div><b style="font-size:1.6rem;color:var(--critical)">${f.last10}</b><div class="muted" style="font-size:.85rem">in the last 10 years</div></div></div>
+    ${bars}${sev}${live(f)}<p class="muted" style="font-size:.75rem;margin-top:10px">Sources: FEMA disaster declarations, FEMA housing assistance records, FEMA National Flood Hazard Layer, NOAA National Water Prediction Service (live).</p>`;
+}
+function live(f) {
+  const GC = { no_flooding: ['No flooding', '#15803D'], action: ['Near flood stage', '#A16207'], minor: ['Minor flooding', '#C2410C'], moderate: ['Moderate flooding', '#B91C1C'], major: ['Major flooding', '#7F1D1D'] };
+  const zone = f.zone ? `<div style="margin-top:14px;font-size:.9rem"><b>FEMA flood zone here:</b> ${esc(f.zone.zone)}, ${esc(f.zone.label)}</div>` : '';
+  const g = (f.gauges || []).map(x => { const c = GC[x.category] || ['No data', '#6B7280'];
+    return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.85rem;margin:4px 0"><span>${esc(x.name)} <span class="muted">(${x.km} km)</span></span><span class="status" style="background:${c[1]}">${c[0]}${x.stage != null ? ', ' + x.stage + ' ' + esc(x.unit) : ''}</span></div>`; }).join('');
+  return zone + (g ? `<div style="margin-top:12px;font-size:.9rem"><b>Live river gauges nearby (NOAA, right now)</b></div>${g}` : '');
+}
+
+$('#samplebtn').onclick = async () => { if (!confirm('Clear every request and load the 6 demo requests again?')) return; $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
 $('#briefbtn').onclick = async () => { const o = $('#brief'); o.hidden = false; o.textContent = 'Reading the open requests… about 10 seconds.'; $('#briefbtn').disabled = true;
-  try { o.textContent = (await post('/api/requests/briefing')).answer; } catch (e) { o.textContent = e.message; } $('#briefbtn').disabled = false; };
+  try { o.innerHTML = '<span class="ai">AI</span>' + esc((await post('/api/requests/briefing')).answer); } catch (e) { o.textContent = e.message; } $('#briefbtn').disabled = false; };
 
 /* ================= TEAM FEEDBACK ================= */
 function whereAmI() {
   const v = (location.hash || '#help').slice(1);
-  if (v === 'help') return S.done ? 'Report damage: result screen' : `Report damage: step ${S.step + 1} (${($('.q') || {}).textContent || ''})`;
-  if (v === 'responders') return `Recovery teams${selId ? ', report ' + selId : ''}`;
+  if (v === 'help') return S.done ? 'Get help: result screen' : `Get help: step ${S.step + 1} (${($('.q') || {}).textContent || ''})`;
+  if (v === 'responders') return `Responders${selId ? ', request ' + selId : ''}`;
   return { about: 'How it works', feedback: 'Feedback page' }[v] || v;
 }
 $('#fbbtn').onclick = () => { const p = $('#fbpanel'); p.hidden = !p.hidden; $('#fbwhere').textContent = 'On: ' + whereAmI(); $('#fbname').value = localStorage.fbname || ''; $('#fbmsg').textContent = ''; if (!p.hidden) $('#fbtext').focus(); };

@@ -382,7 +382,7 @@ async def api_dispatch(request):
 
 
 REQUESTS = Path(os.environ.get("REQUESTS", HERE / "requests.jsonl"))
-LEVELS = {"Urgent": 0, "High": 1, "Medium": 2, "Low": 3}
+LEVELS = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
 DEPTH = {"ankle": ("Water ankle deep", 10), "knee": ("Water knee deep", 20), "waist": ("Water waist deep or higher", 35), "unsure": ("Depth not sure", 10)}
 NEED = {"stay": "Needs a place to stay", "cleanup": "Needs help cleaning out", "repairs": "Needs repairs",
         "supplies": "Needs food, water or medicine", "none": "Nothing needed right now"}
@@ -400,13 +400,166 @@ APPLY = "Apply at DisasterAssistance.gov or call FEMA at 1-800-621-3362. Take ph
 SAMPLE_PHOTOS = []
 
 
+FLOOD_TYPES = ("Flood", "Hurricane", "Severe Storm", "Severe Storm(s)", "Coastal Storm", "Tropical Storm")
+
+
+@lru_cache(maxsize=256)
+def where_is(lat, lon):
+    url = "https://nominatim.openstreetmap.org/reverse?" + urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "json", "zoom": 16, "addressdetails": 1})
+    req = urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.3 (UTSA datathon demo)"})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        a = json.loads(r.read()).get("address", {})
+    return (a.get("county") or "").replace(" County", ""), (a.get("postcode") or "")[:5], a.get("state", "")
+
+
+@lru_cache(maxsize=128)
+def county_declarations(county):
+    url = ("https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries?" + urllib.parse.urlencode({
+        "$filter": f"state eq 'TX' and designatedArea eq '{county} (County)'",
+        "$select": "disasterNumber,declarationTitle,incidentType,declarationDate,declarationType", "$orderby": "declarationDate desc", "$top": 500}))
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.3"}), timeout=20) as r:
+        rows = json.loads(r.read())["DisasterDeclarationsSummaries"]
+    seen = {}
+    for x in rows:
+        if x["incidentType"] in FLOOD_TYPES:
+            seen.setdefault(x["disasterNumber"], x)
+    return [{"number": x["disasterNumber"], "year": int(x["declarationDate"][:4]), "title": x["declarationTitle"].title(),
+             "type": x["incidentType"], "major": x["declarationType"] == "DR"} for x in seen.values()]
+
+
+CACHE_FILE = HERE / "cache.json"
+CACHE = json.loads(CACHE_FILE.read_text()) if CACHE_FILE.exists() else {"history": {}, "verdicts": {}}
+
+
+def save_cache():
+    CACHE_FILE.write_text(json.dumps(CACHE))
+
+
+def flood_history(lat, lon):
+    key = f"{round(lat, 3)},{round(lon, 3)}"
+    if key in CACHE["history"]:
+        return CACHE["history"][key]
+    h = _flood_history(lat, lon)
+    CACHE["history"][key] = h
+    save_cache()
+    return h
+
+
+def _flood_history(lat, lon):
+    county, zipcode, state = where_is(round(lat, 3), round(lon, 3))
+    if state != "Texas" or not county:
+        return None
+    events = county_declarations(county)
+    if not events:
+        return {"county": county, "zip": zipcode, "total": 0, "events": []}
+    this_year = datetime.now().year
+    decades = {}
+    for e in events:
+        d = f"{e['year'] // 10 * 10}s"; decades[d] = decades.get(d, 0) + 1
+    severity = []
+    if zipcode:
+        for e in [x for x in events if x["major"]][:4]:
+            try:
+                f = fema(zipcode, e["number"])
+                n = f["renters"]["applied"] + f["owners"]["applied"]
+                if n:
+                    severity.append({"year": e["year"], "title": e["title"], "households": n,
+                                     "approved": f["renters"]["approved_dollars"] + f["owners"]["approved_dollars"]})
+            except Exception:
+                pass
+    return {"county": county, "zip": zipcode, "total": len(events), "since": min(e["year"] for e in events),
+            "last10": sum(1 for e in events if e["year"] >= this_year - 10), "last_year": max(e["year"] for e in events),
+            "decades": dict(sorted(decades.items())), "severity": severity, "recent": events[:6]}
+
+
+def history_points(h):
+    if not h or not h.get("total"):
+        return 0, None
+    pts = 3 if h["last10"] >= 5 else 2 if h["last10"] >= 2 else 1
+    worst = max((x["households"] for x in h["severity"]), default=0)
+    pts += 3 if worst >= 1000 else 1 if worst >= 100 else 0
+    return pts, f"Flood-prone area: {h['last10']} flood disasters in {h['county']} County in 10 years"
+
+
+@lru_cache(maxsize=512)
+def flood_zone(lat, lon):
+    url = ("https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query?" + urllib.parse.urlencode({
+        "geometry": f"{lon},{lat}", "geometryType": "esriGeometryPoint", "inSR": 4326, "spatialRel": "esriSpatialRelIntersects",
+        "outFields": "FLD_ZONE,ZONE_SUBTY,SFHA_TF", "returnGeometry": "false", "f": "json"}, safe=","))
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.3"}), timeout=12) as r:
+        feats = json.loads(r.read()).get("features", [])
+    if not feats:
+        return None
+    a = feats[0]["attributes"]
+    high = a.get("SFHA_TF") == "T"
+    return {"zone": a.get("FLD_ZONE"), "high_risk": high,
+            "label": "High-risk flood zone (1% chance of flooding every year)" if high else "Outside FEMA's high-risk flood zone"}
+
+
+GAUGES = {}
+
+
+def live_gauges(lat, lon):
+    import time
+    key = f"{round(lat, 2)},{round(lon, 2)}"
+    if key in GAUGES and time.time() - GAUGES[key][0] < 300:
+        return GAUGES[key][1]
+    url = ("https://api.water.noaa.gov/nwps/v1/gauges?" + urllib.parse.urlencode({
+        "bbox.xmin": lon - .15, "bbox.ymin": lat - .15, "bbox.xmax": lon + .15, "bbox.ymax": lat + .15, "srid": "EPSG_4326"}))
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.3"}), timeout=12) as r:
+        gs = json.loads(r.read()).get("gauges", [])
+    out = []
+    for g in gs:
+        obs = (g.get("status") or {}).get("observed") or {}
+        if g.get("latitude") is None:
+            continue
+        out.append({"name": g.get("name"), "id": g.get("lid"), "km": round(km(lat, lon, g["latitude"], g["longitude"]), 1),
+                    "category": obs.get("floodCategory") or "unknown", "stage": obs.get("primary"), "unit": obs.get("primaryUnit") or "ft"})
+    out = sorted(out, key=lambda x: x["km"])[:3]
+    GAUGES[key] = (time.time(), out)
+    return out
+
+
+HISTORY_SUMMARY = {}
+
+
+async def api_history(request):
+    try:
+        lat, lon = float(request.query_params["lat"]), float(request.query_params["lon"])
+        h = await run_in_threadpool(flood_history, lat, lon)
+    except Exception as e:
+        return JSONResponse({"error": f"FEMA's records didn't load ({e})."}, status_code=502)
+    if not h:
+        return JSONResponse({"error": "No FEMA flood history for this spot (outside Texas or no county found)."}, status_code=404)
+    try:
+        h = {**h, "zone": await run_in_threadpool(flood_zone, round(lat, 4), round(lon, 4))}
+    except Exception:
+        h = {**h, "zone": None}
+    try:
+        h["gauges"] = await run_in_threadpool(live_gauges, lat, lon)
+    except Exception:
+        h["gauges"] = []
+    key = (h["county"], h["zip"])
+    if key not in HISTORY_SUMMARY:
+        facts = (f"{h['county']} County, Texas: {h['total']} federal flood-type disasters (floods, hurricanes, severe storms) since {h.get('since')}, "
+                 f"{h.get('last10')} in the last 10 years, most recent {h.get('last_year')}. Households in ZIP {h['zip']} that asked FEMA for help: "
+                 + ("; ".join(f"{x['title']} {x['year']}: {x['households']:,}" for x in h["severity"]) or "no records") + ".")
+        try:
+            HISTORY_SUMMARY[key] = await run_in_threadpool(ask_ai, [
+                {"role": "system", "content": "You brief flood rescue crews. Two plain sentences: how often this area floods and how bad past floods were. Use only the numbers given. The household numbers are households that asked FEMA for help: say exactly that, never 'displaced', 'affected' or 'damaged'."},
+                {"role": "user", "content": facts}], 120)
+        except Exception:
+            HISTORY_SUMMARY[key] = ""
+    return JSONResponse({**h, "summary": HISTORY_SUMMARY[key]})
+
+
 def history_near(lat, lon):
     p = nearest(lat, lon)[0]
     return {"id": p["id"], "place": p["place"], "event": p["event_name"], "event_key": p["event"],
             "km": round(km(lat, lon, p["lat"], p["lon"]), 2)}
 
 
-VERDICTS = {}
+VERDICTS = {k: tuple(v) for k, v in CACHE["verdicts"].items()}
 
 
 def photo_verdict(pid):
@@ -423,33 +576,35 @@ def photo_verdict(pid):
     verdict = "Yes" if w == "yes" else "No" if w == "no" else "Unclear"
     rest = re.sub(r"^\W*(yes|no|unclear)\W*", "", text, flags=re.I)
     VERDICTS[pid] = (verdict, rest[:1].upper() + rest[1:])
+    CACHE["verdicts"][pid] = list(VERDICTS[pid])
+    save_cache()
     return VERDICTS[pid]
 
 
-def score(a, people, verdict):
+EMERGENCY = {"danger": ("In immediate danger", 40, 20), "trapped": ("Trapped", 30, 15), "injured": ("Someone injured", 25, 12),
+             "rising": ("Water rising", 15, 8), "vulnerable": ("Elderly or disabled person", 10, 5)}
+
+
+def score(a, people, hist_pts, hist_why, verdict):
     pts, why = 0, []
-    if a.get("water_inside") == "yes":
-        pts += 30; why.append("Water got inside")
-    elif a.get("water_inside") == "unsure":
-        pts += 15; why.append("Not sure if water got inside")
-    if a.get("water_inside") != "no" and a.get("depth") in DEPTH:
-        label, p = DEPTH[a["depth"]]; pts += p; why.append(label)
-    if a.get("stay") == "no":
-        pts += 25; why.append("Can't stay home tonight")
-    elif a.get("stay") == "unsure":
-        pts += 12; why.append("Not sure they can stay home")
-    if a.get("vulnerable") == "yes":
-        pts += 15; why.append("Elderly, disabled or a baby at home")
-    if a.get("need") == "stay":
-        pts += 15
-    if a.get("need") in NEED and a.get("need") != "none":
-        why.append(NEED[a["need"]])
+    for k, (label, yes, unsure) in EMERGENCY.items():
+        if a.get(k) == "yes":
+            pts += yes; why.append(label)
+        elif a.get(k) == "unsure":
+            pts += unsure; why.append(label + " (not sure)")
+    if a.get("evacuate") == "no":
+        pts += 15; why.append("Can't leave safely")
+    elif a.get("evacuate") == "unsure":
+        pts += 8; why.append("Not sure they can leave safely")
     pts += min(max(people - 1, 0), 4) * 2
+    if hist_pts:
+        pts += hist_pts; why.append(hist_why)
     if verdict == "Yes":
-        pts += 15; why.append("Aerial photo confirms flooding")
-    elif verdict == "No":
-        pts -= 10; why.append("Aerial photo shows no flooding, check first")
-    level = "Urgent" if pts >= 105 else "High" if pts >= 70 else "Medium" if pts >= 35 else "Low"
+        pts += 2; why.append("Aerial photo shows this area flooded before")
+    if a.get("danger") == "yes" or (a.get("trapped") == "yes" and a.get("rising") == "yes") or pts >= 65:
+        level = "Critical"
+    else:
+        level = "High" if pts >= 35 else "Medium" if pts >= 15 else "Low"
     return pts, level, why
 
 
@@ -457,14 +612,14 @@ def read_requests():
     if not REQUESTS.exists():
         return []
     rows = [json.loads(l) for l in REQUESTS.read_text().splitlines() if l.strip()]
-    return sorted(rows, key=lambda r: (r["status"] == "Done", LEVELS.get(r["level"], 9), -r["score"], r["time"]))
+    return sorted(rows, key=lambda r: (r["status"] == "Resolved", LEVELS.get(r["level"], 9), -r["score"], r["time"]))
 
 
 def write_requests(rows):
     REQUESTS.write_text("".join(json.dumps(r) + "\n" for r in rows))
 
 
-def make_report(lat, lon, label, a, people, name, phone, sample=False):
+def make_report(lat, lon, label, a, people, name, phone, sample=False, hist_at=None):
     hist = history_near(lat, lon)
     verdict, vtext = None, ""
     if sample:
@@ -474,29 +629,38 @@ def make_report(lat, lon, label, a, people, name, phone, sample=False):
             verdict, vtext = photo_verdict(hist["id"])
         except Exception:
             verdict, vtext = None, ""
-    pts, level, why = score(a, people, verdict)
+    try:
+        fh = flood_history(*(hist_at or (lat, lon)))
+    except Exception:
+        fh = None
+    hist_pts, hist_why = history_points(fh) if fh else (0, None)
+    try:
+        g = live_gauges(*(hist_at or (lat, lon)))
+    except Exception:
+        g = []
+    flooding = [x for x in g if x["category"] in ("minor", "moderate", "major")]
+    if flooding:
+        hist_pts += {"minor": 2, "moderate": 3, "major": 4}[flooding[0]["category"]]
+        hist_why = (hist_why + "; " if hist_why else "") + f"Live river gauge in {flooding[0]['category']} flood (NOAA)"
+    pts, level, why = score(a, people, hist_pts, hist_why, verdict)
     return {"time": datetime.now().strftime("%H:%M"), "lat": lat, "lon": lon, "label": label, "answers": a, "people": people,
             "name": name, "phone": phone, "score": pts, "level": level, "why": why, "history": hist,
-            "verdict": verdict, "verdict_text": vtext, "status": "New", "sample": sample}
+            "verdict": verdict, "verdict_text": vtext, "hist_pts": hist_pts, "status": "New", "sample": sample}
 
 
 def write_reply(r, case_id, updated):
-    a = r["answers"]
-    tenure = "rents" if a.get("tenure") == "rent" else "owns"
-    photo = (f"The aerial photo near them: {r['verdict']} ({r['verdict_text']})" if r["verdict"] else "No aerial photo near them.")
-    facts = (f"Case number {case_id}{' (updated an earlier report)' if updated else ''}. Priority {r['level']}. "
-             f"What they told us: {', '.join(r['why']) or 'no damage reported'}. The person {tenure} their home. "
-             f"People in the home: {r['people']}. {photo}")
+    facts = (f"Case number {case_id}{' (updated an earlier request)' if updated else ''}. Priority {r['level']}. "
+             f"What they told us: {', '.join(r['why']) or 'nothing urgent'}. People with them: {r['people']}.")
     try:
         return ask_ai([
-            {"role": "system", "content": "You reply to a Texas flood survivor who just reported damage to their home. Warm, plain words, "
-             "3 or 4 short sentences, no lists, no headings. Use only the facts given and never invent numbers or promises of when help arrives. "
-             "Mention their case number. Give the single most useful next step for their situation. Never question or doubt what they reported, and don't mention the aerial photo check (that is for the recovery team). If they can't stay home tonight or need a "
-             "place to stay, tell them to call 2-1-1 for shelter. Remind them to photograph damage before cleaning up."},
+            {"role": "system", "content": "You reply to someone in Texas who just asked for help during a flash flood. Calm, plain words, "
+             "3 or 4 short sentences, no lists, no headings. Use only the facts given; never promise when help arrives. Mention their case number. "
+             "Tell them exactly what to do right now for their situation: stay out of moving water, never drive through flooded roads, "
+             "go to the highest safe place (not a closed attic), keep the phone charged. If they are in immediate danger, tell them to call 911 now."},
             {"role": "user", "content": facts}], 200)
     except Exception:
-        return (f"We received your report, case {case_id}. Take photos of all the damage before you clean up, and apply for FEMA help at "
-                "DisasterAssistance.gov. If you can't stay home tonight, call 2-1-1 for shelter.")
+        return (f"Your request is in, case {case_id}. Stay out of moving water and never drive through a flooded road. Get to the highest safe "
+                "place you can, keep your phone charged, and call 911 if you are in immediate danger.")
 
 
 async def api_request(request: Request):
@@ -506,15 +670,15 @@ async def api_request(request: Request):
         lat, lon = float(b["lat"]), float(b["lon"])
     except (KeyError, TypeError, ValueError):
         return JSONResponse({"error": "We need your location first."}, status_code=400)
-    a = {k: str(b.get("answers", {}).get(k, "")) for k in ("water_inside", "depth", "stay", "need", "vulnerable", "tenure")}
-    if not all(a[k] for k in ("water_inside", "stay", "need", "vulnerable", "tenure")):
+    a = {k: str(b.get("answers", {}).get(k, "")) for k in ("danger", "rising", "trapped", "injured", "evacuate", "vulnerable")}
+    if not all(a.values()):
         return JSONResponse({"error": "Some questions weren't answered. Go back and answer them."}, status_code=400)
     people = max(1, min(int(b.get("people") or 1), 50))
     r = await run_in_threadpool(make_report, lat, lon, str(b.get("label", ""))[:160], a, people,
                                 str(b.get("name", ""))[:60], str(b.get("phone", ""))[:30])
     r["ts"] = time.time()
     rows = read_requests()
-    dup = next((x for x in rows if x["status"] != "Done" and not x.get("sample") and time.time() - x.get("ts", 0) < 1800
+    dup = next((x for x in rows if x["status"] != "Resolved" and not x.get("sample") and time.time() - x.get("ts", 0) < 1800
                 and km(lat, lon, x["lat"], x["lon"]) < 0.05), None)
     if dup:
         r["id"] = dup["id"]
@@ -523,12 +687,9 @@ async def api_request(request: Request):
         r["id"] = f"R{len(rows) + 1:03d}"
         rows.append(r)
     write_requests(rows)
-    pos = [x["id"] for x in read_requests() if x["status"] != "Done"].index(r["id"]) + 1
+    pos = [x["id"] for x in read_requests() if x["status"] != "Resolved"].index(r["id"]) + 1
     reply = await run_in_threadpool(write_reply, r, r["id"], bool(dup))
-    tenure = "own" if a["tenure"] == "own" else "rent"
-    return JSONResponse({"id": r["id"], "updated": bool(dup), "level": r["level"], "position": pos, "reply": reply,
-                         "verdict": r["verdict"], "verdict_text": r["verdict_text"], "photo_km": r["history"]["km"],
-                         "photo_place": r["history"]["place"], "help": HELP[tenure], "apply": APPLY})
+    return JSONResponse({"id": r["id"], "updated": bool(dup), "level": r["level"], "position": pos, "reply": reply})
 
 
 async def api_requests(request):
@@ -539,19 +700,19 @@ async def api_status(request: Request):
     b = await request.json()
     rows = read_requests()
     for r in rows:
-        if r["id"] == request.path_params["rid"] and b.get("status") in ("New", "Team assigned", "Done"):
+        if r["id"] == request.path_params["rid"] and b.get("status") in ("New", "On the way", "Resolved"):
             r["status"] = b["status"]
     write_requests(rows)
     return JSONResponse({"ok": True})
 
 
 SAMPLES = [
-    ({"water_inside": "yes", "depth": "waist", "stay": "no", "need": "stay", "vulnerable": "yes", "tenure": "rent"}, 4),
-    ({"water_inside": "yes", "depth": "knee", "stay": "no", "need": "cleanup", "vulnerable": "no", "tenure": "own"}, 3),
-    ({"water_inside": "yes", "depth": "ankle", "stay": "yes", "need": "cleanup", "vulnerable": "yes", "tenure": "own"}, 2),
-    ({"water_inside": "unsure", "depth": "unsure", "stay": "unsure", "need": "supplies", "vulnerable": "no", "tenure": "rent"}, 1),
-    ({"water_inside": "no", "depth": "", "stay": "yes", "need": "none", "vulnerable": "no", "tenure": "own"}, 2),
-    ({"water_inside": "yes", "depth": "knee", "stay": "no", "need": "repairs", "vulnerable": "no", "tenure": "rent"}, 5),
+    ({"danger": "yes", "rising": "yes", "trapped": "yes", "injured": "no", "evacuate": "no", "vulnerable": "yes"}, 3),
+    ({"danger": "no", "rising": "yes", "trapped": "no", "injured": "yes", "evacuate": "unsure", "vulnerable": "no"}, 2),
+    ({"danger": "unsure", "rising": "yes", "trapped": "no", "injured": "no", "evacuate": "no", "vulnerable": "yes"}, 4),
+    ({"danger": "no", "rising": "no", "trapped": "no", "injured": "no", "evacuate": "yes", "vulnerable": "no"}, 1),
+    ({"danger": "no", "rising": "unsure", "trapped": "yes", "injured": "no", "evacuate": "no", "vulnerable": "no"}, 2),
+    ({"danger": "no", "rising": "no", "trapped": "no", "injured": "no", "evacuate": "unsure", "vulnerable": "yes"}, 2),
 ]
 
 
@@ -565,35 +726,50 @@ def sample_photo_ids():
 
 
 def warm_samples():
+    import time
+    for pid in sample_photo_ids():
+        p = place(pid)
+        key = f"{round(p['lat'], 3)},{round(p['lon'], 3)}"
+        try:
+            if key not in CACHE["history"]:
+                flood_history(p["lat"], p["lon"]); time.sleep(1)
+        except Exception:
+            pass
     for pid in sample_photo_ids():
         try:
             photo_verdict(pid)
         except Exception:
             pass
+    if not REQUESTS.exists():
+        seed_samples()
 
 
-async def api_samples2(request):
-    rows = read_requests()
+def seed_samples(reset=False):
+    rows = [] if reset else read_requests()
     rng = random.Random()
     for i, ((a, people), pid) in enumerate(zip(SAMPLES, sample_photo_ids())):
         p = place(pid)
         lat, lon = p["lat"] + rng.uniform(-.004, .004), p["lon"] + rng.uniform(-.004, .004)
-        r = await run_in_threadpool(make_report, lat, lon, f"Demo report near {p['place']}", a, people, f"Demo {i + 1}", "", True)
+        r = make_report(lat, lon, f"Near {p['place']}", a, people, "", "", True, (p["lat"], p["lon"]))
         r["id"] = f"R{len(rows) + 1:03d}"
         rows.append(r)
     write_requests(rows)
+
+
+async def api_samples2(request):
+    await run_in_threadpool(seed_samples, True)
     return JSONResponse({"ok": True})
 
 
 async def api_briefing(request):
-    rows = [r for r in read_requests() if r["status"] != "Done"]
+    rows = [r for r in read_requests() if r["status"] != "Resolved"]
     if not rows:
         return JSONResponse({"answer": "No open reports."})
     table = "\n".join(f"{r['id']} | {r['level']} | {r['label']} | {', '.join(r['why'])} | people {r['people']} | {r['status']}" for r in rows[:25])
     try:
         answer = await run_in_threadpool(ask_ai, [
-            {"role": "system", "content": "You advise a flood damage and recovery team. Plain words, under 110 words, no headings. "
-             "Say which 3 reports to send a team to first and why, by report ID. Use only the list."},
+            {"role": "system", "content": "You brief flood rescue crews. Plain words, under 110 words, no headings. "
+             "Say which 3 requests to reach first and why, by request ID. Use only the list."},
             {"role": "user", "content": table}], 300)
     except Exception:
         return JSONResponse({"error": "The AI didn't answer. Try again."}, status_code=502)
@@ -715,7 +891,7 @@ import threading
 threading.Thread(target=warm_samples, daemon=True).start()
 
 app = Starlette(routes=[
-    Route("/", index), Route("/api/feedback", api_feedback, methods=["GET", "POST"]), Route("/api/hoods", api_hoods), Route("/api/hood", api_hood),
+    Route("/", index), Route("/api/history", api_history), Route("/api/feedback", api_feedback, methods=["GET", "POST"]), Route("/api/hoods", api_hoods), Route("/api/hood", api_hood),
     Route("/api/fema", api_fema), Route("/api/ready", api_ready, methods=["POST"]), Route("/api/places", api_places), Route("/api/find", api_find), Route("/api/geo", api_geo), Route("/api/suggest", api_suggest), Route("/api/reverse", api_reverse),
     Route("/api/request", api_request, methods=["POST"]), Route("/api/requests", api_requests),
     Route("/api/requests/{rid}/status", api_status, methods=["POST"]), Route("/api/requests/samples", api_samples2, methods=["POST"]),
