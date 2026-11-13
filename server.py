@@ -917,11 +917,41 @@ async def api_samples2(request):
     return JSONResponse({"ok": True})
 
 
+CLAIMS = {"trapped": "Trapped", "injur": "Someone injured", "elderly": "Elderly or disabled person", "disabled": "Elderly or disabled person",
+          "immediate danger": "In immediate danger"}
+
+
+def briefing_ok(text, rows):
+    """Every request the AI talks about may only be described with conditions that person actually reported."""
+    import re
+    by_id = {r["id"]: " ".join(r["why"]).lower() for r in rows}
+    parts = re.split(r"(R\d{3})", text)
+    current = []
+    for p in parts:
+        if re.fullmatch(r"R\d{3}", p):
+            current = [p]
+            continue
+        if not current:
+            continue
+        seg = p.lower().split(".")[0]
+        for word, reason in CLAIMS.items():
+            if word in seg and current[0] in by_id and reason.lower() not in by_id[current[0]]:
+                return False
+    return True
+
+
+def plain_briefing(rows, groups):
+    first = f"Send one crew to the hotspot: {groups[0]}. " if groups else ""
+    order = ", ".join(f"{r['id']} ({r['level']})" for r in rows if r["status"] != "Resolved")
+    return first + f"Then work down the list in this order: {order}."
+
+
 async def api_briefing(request):
     rows = [r for r in read_requests() if r["status"] != "Resolved"]
     if not rows:
         return JSONResponse({"answer": "No open reports."})
-    table = "\n".join(f"{r['id']} | {r['level']} | {r['label']} | {', '.join(r['why'])} | people {r['people']} | {r['status']}" for r in rows[:25])
+    own = lambda r: ", ".join(w for w in r["why"] if not w.startswith(("Flood-prone", "Aerial photo", "River rising", "Live river"))) or "no urgent answers"
+    table = "\n".join(f"{r['id']} | {r['level']} | {own(r)} | people {r['people']} | {r['status']}" for r in rows[:25])
     seen, groups = set(), []
     for r in rows:
         if r["id"] in seen:
@@ -935,13 +965,21 @@ async def api_briefing(request):
             groups.append(", ".join(x["id"] for x in g))
     if groups:
         table += "\n\nHotspots (requests within 1.5 km of each other, one crew can reach them together): " + "; ".join(groups)
-    try:
-        answer = await run_in_threadpool(ask_ai, [
-            {"role": "system", "content": "You brief flood rescue crews. Plain words, under 110 words, no headings. "
-             "Say which requests to reach first and why, by request ID. Always put every Critical request before any High, and High before Medium. If a hotspot contains urgent requests, say one crew can cover that hotspot together. Use only the list."},
-            {"role": "user", "content": table}], 300)
-    except Exception:
-        return JSONResponse({"error": "The AI didn't answer. Try again."}, status_code=502)
+    system = ("You brief flood rescue crews. Plain words, under 80 words, no headings. Name at most the top 4 requests to reach first, by request ID, with a few words on why. "
+              "Always put every Critical request before any High, and High before Medium. If a hotspot contains urgent requests, say one crew can cover it together. "
+              "For each request, use only the reasons written next to it, in the same words. Never add a condition that is not listed for that request: "
+              "for example, never call someone trapped or injured unless 'Trapped' or 'Someone injured' is in their reasons.")
+    answer = None
+    for _ in range(2):
+        try:
+            text = await run_in_threadpool(ask_ai, [{"role": "system", "content": system}, {"role": "user", "content": table}], 300)
+        except Exception:
+            break
+        if briefing_ok(text, rows):
+            answer = text
+            break
+    if answer is None:
+        answer = plain_briefing(rows, groups)
     return JSONResponse({"answer": answer})
 
 
