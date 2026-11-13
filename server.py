@@ -207,7 +207,7 @@ def nominatim(q, limit=5):
     url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
         {"q": q, "format": "json", "limit": limit, "countrycodes": "us", "addressdetails": 0})
     req = urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.2 (UTSA datathon demo)"})
-    with urllib.request.urlopen(req, timeout=15) as r:
+    with urllib.request.urlopen(req, timeout=6) as r:
         return [(float(h["lat"]), float(h["lon"]), h["display_name"]) for h in json.loads(r.read())]
 
 
@@ -406,8 +406,12 @@ def history_near(lat, lon):
             "km": round(km(lat, lon, p["lat"], p["lon"]), 2)}
 
 
-@lru_cache(maxsize=1024)
+VERDICTS = {}
+
+
 def photo_verdict(pid):
+    if pid in VERDICTS:
+        return VERDICTS[pid]
     p = place(pid)
     images = [i for i in (p["before"], p["id"]) if i]
     content = [{"type": "image_url", "image_url": {"url": data_url(i)}} for i in images]
@@ -418,7 +422,8 @@ def photo_verdict(pid):
     w = re.split(r"\W+", text.lower(), maxsplit=1)[0] if text else ""
     verdict = "Yes" if w == "yes" else "No" if w == "no" else "Unclear"
     rest = re.sub(r"^\W*(yes|no|unclear)\W*", "", text, flags=re.I)
-    return verdict, rest[:1].upper() + rest[1:]
+    VERDICTS[pid] = (verdict, rest[:1].upper() + rest[1:])
+    return VERDICTS[pid]
 
 
 def score(a, people, verdict):
@@ -444,7 +449,7 @@ def score(a, people, verdict):
         pts += 15; why.append("Aerial photo confirms flooding")
     elif verdict == "No":
         pts -= 10; why.append("Aerial photo shows no flooding, check first")
-    level = "Urgent" if pts >= 70 else "High" if pts >= 45 else "Medium" if pts >= 20 else "Low"
+    level = "Urgent" if pts >= 105 else "High" if pts >= 70 else "Medium" if pts >= 35 else "Low"
     return pts, level, why
 
 
@@ -462,7 +467,9 @@ def write_requests(rows):
 def make_report(lat, lon, label, a, people, name, phone, sample=False):
     hist = history_near(lat, lon)
     verdict, vtext = None, ""
-    if hist["km"] <= 3:
+    if sample:
+        verdict, vtext = VERDICTS.get(hist["id"], (None, ""))
+    elif hist["km"] <= 3:
         try:
             verdict, vtext = photo_verdict(hist["id"])
         except Exception:
@@ -473,25 +480,55 @@ def make_report(lat, lon, label, a, people, name, phone, sample=False):
             "verdict": verdict, "verdict_text": vtext, "status": "New", "sample": sample}
 
 
+def write_reply(r, case_id, updated):
+    a = r["answers"]
+    tenure = "rents" if a.get("tenure") == "rent" else "owns"
+    photo = (f"The aerial photo near them: {r['verdict']} ({r['verdict_text']})" if r["verdict"] else "No aerial photo near them.")
+    facts = (f"Case number {case_id}{' (updated an earlier report)' if updated else ''}. Priority {r['level']}. "
+             f"What they told us: {', '.join(r['why']) or 'no damage reported'}. The person {tenure} their home. "
+             f"People in the home: {r['people']}. {photo}")
+    try:
+        return ask_ai([
+            {"role": "system", "content": "You reply to a Texas flood survivor who just reported damage to their home. Warm, plain words, "
+             "3 or 4 short sentences, no lists, no headings. Use only the facts given and never invent numbers or promises of when help arrives. "
+             "Mention their case number. Give the single most useful next step for their situation. Never question or doubt what they reported, and don't mention the aerial photo check (that is for the recovery team). If they can't stay home tonight or need a "
+             "place to stay, tell them to call 2-1-1 for shelter. Remind them to photograph damage before cleaning up."},
+            {"role": "user", "content": facts}], 200)
+    except Exception:
+        return (f"We received your report, case {case_id}. Take photos of all the damage before you clean up, and apply for FEMA help at "
+                "DisasterAssistance.gov. If you can't stay home tonight, call 2-1-1 for shelter.")
+
+
 async def api_request(request: Request):
+    import time
     b = await request.json()
     try:
         lat, lon = float(b["lat"]), float(b["lon"])
     except (KeyError, TypeError, ValueError):
         return JSONResponse({"error": "We need your location first."}, status_code=400)
     a = {k: str(b.get("answers", {}).get(k, "")) for k in ("water_inside", "depth", "stay", "need", "vulnerable", "tenure")}
+    if not all(a[k] for k in ("water_inside", "stay", "need", "vulnerable", "tenure")):
+        return JSONResponse({"error": "Some questions weren't answered. Go back and answer them."}, status_code=400)
     people = max(1, min(int(b.get("people") or 1), 50))
     r = await run_in_threadpool(make_report, lat, lon, str(b.get("label", ""))[:160], a, people,
                                 str(b.get("name", ""))[:60], str(b.get("phone", ""))[:30])
+    r["ts"] = time.time()
     rows = read_requests()
-    r["id"] = f"R{len(rows) + 1:03d}"
-    rows.append(r)
+    dup = next((x for x in rows if x["status"] != "Done" and not x.get("sample") and time.time() - x.get("ts", 0) < 1800
+                and km(lat, lon, x["lat"], x["lon"]) < 0.05), None)
+    if dup:
+        r["id"] = dup["id"]
+        rows = [r if x["id"] == dup["id"] else x for x in rows]
+    else:
+        r["id"] = f"R{len(rows) + 1:03d}"
+        rows.append(r)
     write_requests(rows)
     pos = [x["id"] for x in read_requests() if x["status"] != "Done"].index(r["id"]) + 1
+    reply = await run_in_threadpool(write_reply, r, r["id"], bool(dup))
     tenure = "own" if a["tenure"] == "own" else "rent"
-    return JSONResponse({"id": r["id"], "level": r["level"], "position": pos, "verdict": r["verdict"], "verdict_text": r["verdict_text"],
-                         "photo_km": r["history"]["km"], "photo_place": r["history"]["place"], "photo_event": r["history"]["event"],
-                         "help": HELP[tenure], "apply": APPLY})
+    return JSONResponse({"id": r["id"], "updated": bool(dup), "level": r["level"], "position": pos, "reply": reply,
+                         "verdict": r["verdict"], "verdict_text": r["verdict_text"], "photo_km": r["history"]["km"],
+                         "photo_place": r["history"]["place"], "help": HELP[tenure], "apply": APPLY})
 
 
 async def api_requests(request):
@@ -652,6 +689,24 @@ async def api_ready(request: Request):
     return JSONResponse({"tips": [t.strip()[2:].strip() for t in tips.splitlines() if t.strip().startswith("-")][:4] or [tips]})
 
 
+FEEDBACK = HERE / "feedback.jsonl"
+
+
+async def api_feedback(request: Request):
+    if request.method == "POST":
+        b = await request.json()
+        text = str(b.get("text", "")).strip()[:1000]
+        if not text:
+            return JSONResponse({"error": "Write what's wrong first."}, status_code=400)
+        row = {"time": datetime.now().strftime("%H:%M"), "name": str(b.get("name", "")).strip()[:40] or "Someone",
+               "where": str(b.get("where", ""))[:200], "text": text}
+        with FEEDBACK.open("a") as f:
+            f.write(json.dumps(row) + "\n")
+        return JSONResponse({"ok": True})
+    rows = [json.loads(l) for l in FEEDBACK.read_text().splitlines() if l.strip()] if FEEDBACK.exists() else []
+    return JSONResponse(rows[::-1])
+
+
 async def home(request):
     return FileResponse(HERE / "static" / "home.html")
 
@@ -660,7 +715,7 @@ import threading
 threading.Thread(target=warm_samples, daemon=True).start()
 
 app = Starlette(routes=[
-    Route("/", index), Route("/api/hoods", api_hoods), Route("/api/hood", api_hood),
+    Route("/", index), Route("/api/feedback", api_feedback, methods=["GET", "POST"]), Route("/api/hoods", api_hoods), Route("/api/hood", api_hood),
     Route("/api/fema", api_fema), Route("/api/ready", api_ready, methods=["POST"]), Route("/api/places", api_places), Route("/api/find", api_find), Route("/api/geo", api_geo), Route("/api/suggest", api_suggest), Route("/api/reverse", api_reverse),
     Route("/api/request", api_request, methods=["POST"]), Route("/api/requests", api_requests),
     Route("/api/requests/{rid}/status", api_status, methods=["POST"]), Route("/api/requests/samples", api_samples2, methods=["POST"]),

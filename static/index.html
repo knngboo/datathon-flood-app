@@ -6,6 +6,7 @@
 <meta name="color-scheme" content="light only">
 <meta name="darkreader-lock">
 <title>Texas Flood Check</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%2313294B%22/%3E%3Cpath d=%22M5 20c4-3 7 3 11 0s7 3 11 0v6H5z%22 fill=%22%2360A5FA%22/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/leaflet/leaflet.css">
@@ -67,6 +68,7 @@
   .result .pos { font-size: 1.05rem; margin: 0 0 6px; }
   .result h3 { margin: 18px 0 6px; font-size: 1rem; color: var(--ink); }
   .result p { line-height: 1.55; margin: 0; }
+  .bubble-ai { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 14px 0 4px; }
 
   /* responders */
   .ops { display: grid; grid-template-columns: 420px 1fr; height: calc(100vh - 58px); }
@@ -117,7 +119,8 @@
   .limits div { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; line-height: 1.5; }
 
   @media (max-width: 900px) {
-    header { padding: 0 14px; } .brand { font-size: 1rem; white-space: nowrap; } nav { white-space: nowrap; } nav a { margin-left: 12px; font-size: .9rem; }
+    header { flex-wrap: wrap; height: auto; padding: 10px 14px 0; } .brand { width: 100%; font-size: 1.05rem; } nav { display: flex; width: 100%; justify-content: space-between; } nav a { margin: 0; padding: 10px 0 9px; font-size: .92rem; }
+    .ops { height: auto; }
     .ops { grid-template-columns: 1fr; height: auto; } .side { grid-template-rows: 320px auto; } .queue { max-height: 60vh; }
     .dgrid, .limits { grid-template-columns: 1fr; }
   }
@@ -151,6 +154,24 @@
     <div class="side"><div id="opsmap"></div><div class="detail" id="detail"><p class="muted">Select a report to see why it's ranked there.</p></div></div>
   </div>
 </section>
+
+<section class="view" id="view-feedback">
+  <div class="doc">
+    <h1>Team feedback</h1>
+    <p class="muted">Newest first. Updates every 10 seconds.</p>
+    <div id="fblist"></div>
+  </div>
+</section>
+
+<button id="fbbtn" class="btn" hidden style="position:fixed;right:18px;bottom:18px;z-index:2000;box-shadow:0 6px 18px rgba(19,41,75,.25)">Team feedback</button>
+<div id="fbpanel" hidden style="position:fixed;right:18px;bottom:76px;z-index:2000;width:min(360px,calc(100vw - 36px));background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 12px 32px rgba(19,41,75,.22)">
+  <b style="color:var(--ink)">What's wrong or confusing here?</b>
+  <p class="muted" style="font-size:.82rem;margin:4px 0 8px" id="fbwhere"></p>
+  <textarea id="fbtext" rows="4" style="width:100%;font:inherit;padding:10px;border:2px solid var(--line);border-radius:10px"></textarea>
+  <input id="fbname" placeholder="Your name" style="width:100%;margin-top:8px;font:inherit;padding:9px 10px;border:2px solid var(--line);border-radius:10px">
+  <div style="display:flex;gap:8px;margin-top:10px;align-items:center"><button class="btn" id="fbsend">Send</button><a href="#feedback" id="fball">See all feedback</a></div>
+  <p class="muted" id="fbmsg" style="font-size:.85rem;margin:8px 0 0"></p>
+</div>
 
 <section class="view" id="view-about">
   <div class="doc">
@@ -211,11 +232,14 @@ async function post(url, body) {
 const getJSON = async url => { const r = await fetch(url); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Something went wrong.'); return j; };
 
 function route() {
-  const v = ['help', 'responders', 'about'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'help';
+  if (location.hash === '#team') { localStorage.team = '1'; location.hash = '#feedback'; return; }
+  $('#fbbtn').hidden = localStorage.team !== '1';
+  const v = ['help', 'responders', 'about', 'feedback'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'help';
   document.querySelectorAll('nav a').forEach(a => a.classList.toggle('on', a.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'view-' + v));
   if (v === 'help') renderStep();
   if (v === 'responders') openOps();
+  if (v === 'feedback') loadFeedback();
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);
@@ -237,7 +261,7 @@ let pinmap, pickmap, pin;
 
 function renderStep() {
   $('#prog').style.width = (S.done ? 100 : (S.step / TOTAL) * 100) + '%';
-  $('#stepno').textContent = S.done ? 'Request sent' : `Step ${S.step + 1} of ${TOTAL}`;
+  $('#stepno').textContent = S.done ? 'Report sent' : `Step ${S.step + 1} of ${TOTAL}, about a minute`;
   $('#back').style.visibility = S.step > 0 && !S.done ? 'visible' : 'hidden';
   const box = $('#step');
   if (S.done) return renderDone(box);
@@ -263,7 +287,7 @@ function renderWhere(box) {
     <p class="hint">Start typing your street address, then pick it from the list.</p>
     <div id="chosen" class="chosen" hidden><div class="top"><span>Sending help to<br><b id="chosenlabel"></b></span><button type="button" id="change">Change</button></div><div id="pinmap"></div></div>
     <div id="finder">
-      <div class="search"><div style="display:flex;gap:8px"><input id="addr" placeholder="Street address or ZIP code" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugg"><button class="btn" type="button" id="addrgo">Search</button></div><ul class="sugg" id="sugg" role="listbox" hidden></ul></div>
+      <div class="search"><div style="display:flex;gap:8px"><input id="addr" placeholder="Address or ZIP code" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugg"><button class="btn" type="button" id="addrgo">Search</button></div><ul class="sugg" id="sugg" role="listbox" hidden></ul></div>
       <p class="hint small" id="addrmsg">Don't see your address in the list? Type the full street and tap Search.</p>
       <div class="alts"><button class="btn ghost" type="button" id="geo">Use my current location</button><button class="btn ghost" type="button" id="showpick">Pick on a map instead</button></div>
       <div id="pickwrap" hidden><p class="hint">Tap where you are.</p><div id="pickmap"></div></div>
@@ -349,7 +373,7 @@ function renderReview(box) {
     <p class="hint" id="senderr"></p>`;
   $('#fix').onclick = () => { S.step = 1; renderStep(); };
   $('#sendbtn').onclick = async () => {
-    $('#sendbtn').disabled = true; $('#sendbtn').textContent = 'Sending and checking the aerial photo… about 10 seconds';
+    $('#sendbtn').disabled = true; $('#sendbtn').textContent = 'Sending, checking the aerial photo and writing your reply… about 15 seconds';
     try {
       S.done = await post('/api/request', { lat: S.lat, lon: S.lon, label: S.label, answers: S.answers, people: S.people, name: S.name, phone: S.phone });
       renderStep();
@@ -360,16 +384,17 @@ function renderReview(box) {
 function renderDone(box) {
   const d = S.done, c = LVL[d.level];
   const v = d.verdict === 'Yes' ? ['Flooding seen', 'var(--critical)'] : d.verdict === 'No' ? ['No flooding seen', 'var(--low)'] : d.verdict ? ['Unclear', 'var(--medium)'] : null;
-  const photo = v
-    ? `<h3>What the aerial photo shows near you</h3><p><span class="status" style="background:${v[1]}">${v[0]}</span> ${esc(d.verdict_text)}</p><p class="muted" style="font-size:.85rem;margin-top:6px">AI check of NOAA's aerial photo of ${esc(d.photo_place)}, ${d.photo_km} km from your address.</p>`
-    : `<h3>Aerial photo</h3><p class="muted">We don't have an aerial photo within 3 km of your address, so a team will check in person.</p>`;
   box.innerHTML = `<div class="result" style="border-left-color:${c}">
-      <h2>Report received</h2>
-      <p class="pos">Your case number is <b>${d.id}</b>. Keep it.</p>
-      <p>Priority for recovery teams: <b style="color:${c}">${d.level}</b>. You are number <b>${d.position}</b> on their list.</p>
-      ${photo}
-      <h3>Help you can apply for now</h3><ul style="margin:0;padding-left:20px;line-height:1.6">${d.help.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
-      <p style="margin-top:10px"><b>${esc(d.apply)}</b></p>
+      <h2>${d.updated ? 'Report updated' : 'Report received'}: case ${d.id}</h2>
+      ${d.updated ? '<p class="muted">You already reported this address, so we updated that report instead of making a new one.</p>' : ''}
+      <div class="bubble-ai"><p>${esc(d.reply)}</p><p class="muted" style="font-size:.82rem;margin-top:6px">Written by our AI from your answers.</p></div>
+      <h3>Help you can apply for</h3><ul style="margin:0;padding-left:20px;line-height:1.6">${d.help.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+      <p style="margin-top:12px">Apply at <a href="https://www.disasterassistance.gov" target="_blank"><b>DisasterAssistance.gov</b></a> or call FEMA at <a href="tel:18006213362" style="white-space:nowrap"><b>1-800-621-3362</b></a>.</p>
+      <details style="margin-top:16px"><summary style="cursor:pointer;font-weight:700;color:var(--ink)">What the recovery team sees</summary>
+        <p style="margin-top:8px">Priority <b style="color:${c}">${d.level}</b>, number ${d.position} on their list.</p>
+        ${v ? `<p style="margin-top:6px"><span class="status" style="background:${v[1]}">${v[0]}</span> ${esc(d.verdict_text)} <span class="muted">(AI check of NOAA's aerial photo of ${esc(d.photo_place)}, ${d.photo_km} km away)</span></p>`
+            : '<p class="muted" style="margin-top:6px">No aerial photo within 3 km of this address, so a team will check in person.</p>'}
+      </details>
     </div>
     <p style="margin-top:18px"><button class="btn ghost" id="again">Report a different home</button></p>`;
   $('#again').onclick = () => { Object.assign(S, { step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, name: '', phone: '', done: null }); pinmap = null; pickmap = null; renderStep(); };
@@ -423,13 +448,14 @@ function selectReq(id, fly) {
   $('#detail').innerHTML = `<h2>${r.id}: <span style="color:${LVL[r.level]}">${r.level}</span> <span class="muted" style="font-weight:500;font-size:1rem">${r.score} points</span></h2>
     <div class="meta">Sent ${esc(r.time)}. ${esc(r.label)}. ${r.people} ${r.people === 1 ? 'person' : 'people'}${r.phone ? '. Phone ' + esc(r.phone) : ''}${r.name ? '. ' + esc(r.name) : ''}.</div>
     <div class="dgrid"><div>
-      <div class="why"><b>Why it's ranked here:</b> ${esc(r.why.join(', ') || 'no urgent answers')}.</div>
+      <div class="why"><b>Why it's ranked here:</b> ${esc(r.why.map((w, i) => i ? w[0].toLowerCase() + w.slice(1) : w).join(', ') || 'no damage reported')}.</div>
       <div class="answers">${ans}</div>
       <div class="why" id="femaline" style="margin-top:14px">Loading FEMA records for this ZIP code…</div>
       <div class="actions">${actions}</div>
     </div><div><b style="color:var(--ink)">Aerial photo of this address</b>${near ? `<div class="meta" style="margin:2px 0 8px">${esc(p.place)}, ${h.km} km away</div>` : ''}${photo}</div></div>`;
   document.querySelectorAll('.actions button').forEach(b => b.onclick = async () => { await post(`/api/requests/${r.id}/status`, { status: b.dataset.s }); loadRows(false); });
   const cmp = $('#cmp'); if (cmp) { const s = cmp.querySelector('input'); s.oninput = () => { cmp.querySelector('.before').style.clipPath = `inset(0 ${100 - s.value}% 0 0)`; cmp.querySelector('.bar').style.left = s.value + '%'; }; }
+  if (h.km > 25) { $('#femaline').textContent = 'No FEMA records loaded for this area: it is outside the two floods we have data for.'; return; }
   getJSON(`/api/fema?event=${h.event_key || 'harvey'}&lat=${r.lat}&lon=${r.lon}`).then(f => {
     if (selId !== id) return;
     const t = f.renters.applied + f.owners.applied;
@@ -439,6 +465,27 @@ function selectReq(id, fly) {
 $('#samplebtn').onclick = async () => { $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
 $('#briefbtn').onclick = async () => { const o = $('#brief'); o.hidden = false; o.textContent = 'Reading the open requests… about 10 seconds.'; $('#briefbtn').disabled = true;
   try { o.textContent = (await post('/api/requests/briefing')).answer; } catch (e) { o.textContent = e.message; } $('#briefbtn').disabled = false; };
+
+/* ================= TEAM FEEDBACK ================= */
+function whereAmI() {
+  const v = (location.hash || '#help').slice(1);
+  if (v === 'help') return S.done ? 'Report damage: result screen' : `Report damage: step ${S.step + 1} (${($('.q') || {}).textContent || ''})`;
+  if (v === 'responders') return `Recovery teams${selId ? ', report ' + selId : ''}`;
+  return { about: 'How it works', feedback: 'Feedback page' }[v] || v;
+}
+$('#fbbtn').onclick = () => { const p = $('#fbpanel'); p.hidden = !p.hidden; $('#fbwhere').textContent = 'On: ' + whereAmI(); $('#fbname').value = localStorage.fbname || ''; $('#fbmsg').textContent = ''; if (!p.hidden) $('#fbtext').focus(); };
+$('#fbsend').onclick = async () => {
+  const text = $('#fbtext').value.trim(); if (!text) { $('#fbmsg').textContent = 'Write what\'s wrong first.'; return; }
+  localStorage.fbname = $('#fbname').value.trim();
+  try { await post('/api/feedback', { text, name: localStorage.fbname, where: whereAmI() }); $('#fbtext').value = ''; $('#fbmsg').textContent = 'Sent. Thanks.'; if (location.hash === '#feedback') loadFeedback(); }
+  catch (e) { $('#fbmsg').textContent = e.message; }
+};
+async function loadFeedback() {
+  const rows = await getJSON('/api/feedback');
+  $('#fblist').innerHTML = rows.length ? rows.map(r => `<div class="card" style="cursor:default;margin:10px 0;border-left-color:var(--ink)"><div class="meta">${esc(r.time)}, ${esc(r.name)}, on ${esc(r.where)}</div><div style="margin-top:6px;line-height:1.5">${esc(r.text)}</div></div>`).join('')
+    : '<p class="muted">No feedback yet. Use the Team feedback button on any screen.</p>';
+}
+setInterval(() => { if (location.hash === '#feedback') loadFeedback(); }, 10000);
 
 route();
 </script>
