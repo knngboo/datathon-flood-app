@@ -543,9 +543,45 @@ def all_gauges():
     return GAUGES["all"]
 
 
+USGS = {}
+
+
+def usgs_gauges(lat, lon):
+    """USGS stream gauges (live, generous limits): latest water height and the change over the last 3 hours."""
+    import time
+    key = f"{round(lat, 2)},{round(lon, 2)}"
+    if key in USGS and time.time() - USGS[key][0] < 300:
+        return USGS[key][1]
+    url = ("https://waterservices.usgs.gov/nwis/iv/?" + urllib.parse.urlencode({
+        "format": "json", "bBox": f"{lon - .15:.3f},{lat - .15:.3f},{lon + .15:.3f},{lat + .15:.3f}",
+        "parameterCd": "00065", "siteStatus": "active", "period": "PT3H"}, safe=","))
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.3"}), timeout=12) as r:
+        series = json.loads(r.read())["value"]["timeSeries"]
+    out = []
+    for ts in series:
+        vals = [v for v in ts["values"][0]["value"] if v.get("value") not in (None, "", "-999999")]
+        if len(vals) < 2:
+            continue
+        g = ts["sourceInfo"]["geoLocation"]["geogLocation"]
+        first, last = float(vals[0]["value"]), float(vals[-1]["value"])
+        change = round(last - first, 2)
+        out.append({"name": ts["sourceInfo"]["siteName"].title().replace(" Tx", " TX"), "km": round(km(lat, lon, g["latitude"], g["longitude"]), 1),
+                    "source": "USGS", "stage": last, "unit": "ft", "change": change,
+                    "category": "rising" if change >= .2 else "falling" if change <= -.2 else "steady"})
+    out = sorted([g for g in out if g["km"] <= 20], key=lambda x: x["km"])[:3]
+    USGS[key] = (time.time(), out)
+    return out
+
+
 def live_gauges(lat, lon):
-    near = [{**g, "km": round(km(lat, lon, g["lat"], g["lon"]), 1)} for g in all_gauges()]
-    return sorted([g for g in near if g["km"] <= 20], key=lambda x: x["km"])[:3]
+    near = [{**g, "km": round(km(lat, lon, g["lat"], g["lon"]), 1), "source": "NOAA"} for g in all_gauges()]
+    noaa = sorted([g for g in near if g["km"] <= 20], key=lambda x: x["km"])[:3]
+    if noaa:
+        return noaa
+    try:
+        return usgs_gauges(lat, lon)
+    except Exception:
+        return []
 
 
 def checked_insight(text, h):
@@ -681,9 +717,13 @@ def history_parts(lat, lon):
     except Exception:
         g = []
     flooding = [x for x in g if x["category"] in ("minor", "moderate", "major")]
+    rising = [x for x in g if x["category"] == "rising" and x.get("change", 0) >= 1]
     if flooding:
         hist_pts += {"minor": 2, "moderate": 3, "major": 4}[flooding[0]["category"]]
         hist_why = (hist_why + "; " if hist_why else "") + f"Live river gauge in {flooding[0]['category']} flood (NOAA)"
+    elif rising:
+        hist_pts += 2
+        hist_why = (hist_why + "; " if hist_why else "") + f"River rising fast nearby: {rising[0]['change']} ft in 3 hours (USGS)"
     return hist_pts, hist_why
 
 

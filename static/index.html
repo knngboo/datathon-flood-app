@@ -247,6 +247,7 @@
       <tr><td>Flood history: households in this ZIP that applied to FEMA in a past flood (1,000+: 3, 100+: 1)</td><td colspan="2">up to 3</td></tr>
       <tr><td>Aerial photo shows the area flooded before</td><td colspan="2">2</td></tr>
       <tr><td>A NOAA river gauge nearby is in flood right now (minor / moderate / major)</td><td colspan="2">2 / 3 / 4</td></tr>
+      <tr><td>Or, if NOAA has no reading: a USGS gauge nearby rose 1 ft or more in the last 3 hours</td><td colspan="2">2</td></tr>
     </table>
     <p class="muted" style="margin-top:10px">Critical: in immediate danger, or trapped with water rising, or 65 points and up. High: 35 and up. Medium: 15 and up. Low: below 15. History adds at most 8 points, so it can never outrank someone in danger right now.</p>
     <h2>Hotspots</h2>
@@ -257,7 +258,7 @@
       <tr><td>Recorded flood events by county</td><td>FEMA disaster declarations since 1953 (OpenFEMA)</td></tr>
       <tr><td>Households that applied for help, by ZIP code</td><td>FEMA housing assistance records (OpenFEMA)</td></tr>
       <tr><td>Flood zone at the exact spot</td><td>FEMA National Flood Hazard Layer (the data behind FEMA's Flood Map Service Center)</td></tr>
-      <tr><td>River levels right now</td><td>NOAA National Water Prediction Service (live gauges)</td></tr>
+      <tr><td>River levels right now</td><td>NOAA National Water Prediction Service, or USGS Water Services when NOAA is busy (live gauges)</td></tr>
       <tr><td>Aerial photos after past floods</td><td><a href="https://storms.ngs.noaa.gov/" target="_blank">NOAA emergency response imagery</a> (Harvey 2017, Hill Country 2025)</td></tr>
       <tr><td>Aerial photos before Harvey</td><td>USDA National Agriculture Imagery Program (2016)</td></tr>
       <tr><td>Photo collection for this event</td><td>Organizers' <a href="https://huggingface.co/datasets/jennifer-fowler/UTSA-flood-images" target="_blank">Hugging Face dataset</a></td></tr>
@@ -584,11 +585,12 @@ function histReport(f) {
   </div>${live(f)}`;
 }
 function live(f) {
-  const GC = { no_flooding: ['No flooding', '#15803D'], action: ['Near flood stage', '#A16207'], minor: ['Minor flooding', '#C2410C'], moderate: ['Moderate flooding', '#B91C1C'], major: ['Major flooding', '#7F1D1D'] };
+  const GC = { no_flooding: ['No flooding', '#15803D'], action: ['Near flood stage', '#A16207'], minor: ['Minor flooding', '#C2410C'], moderate: ['Moderate flooding', '#B91C1C'], major: ['Major flooding', '#7F1D1D'], rising: ['Rising', '#C2410C'], steady: ['Steady', '#4B5563'], falling: ['Falling', '#15803D'] };
   const zone = f.zone ? `<div style="margin-top:14px"><b style="color:var(--ink)">At this spot</b></div><div style="font-size:.9rem;margin-top:4px">FEMA flood zone ${esc(f.zone.zone)}: ${f.zone.high_risk ? 'high-risk area, a 1% chance of flooding every year' : 'outside the high-risk flood area'}</div>` : '';
   const g = (f.gauges || []).map(x => { const c = GC[x.category] || ['No data', '#6B7280'];
-    return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.85rem;margin:4px 0"><span>${esc(x.name)} <span class="muted">(${x.km} km)</span></span><span class="status" style="background:${c[1]}">${c[0]}${x.stage != null ? ', ' + x.stage + ' ' + esc(x.unit) : ''}</span></div>`; }).join('');
-  return zone + (g ? `<div style="margin-top:14px"><b style="color:var(--ink)">Right now: river gauges nearby</b> <span class="muted" style="font-size:.8rem">(NOAA, live)</span></div>${g}` : '') + `<p class="muted" style="font-size:.75rem;margin-top:10px">Sources: FEMA disaster declarations and housing assistance records, FEMA National Flood Hazard Layer, NOAA National Water Prediction Service.</p>`;
+    const detail = x.source === 'USGS' ? (x.category === 'steady' ? ` (${x.stage} ft)` : ` ${Math.abs(x.change)} ft in 3 h`) : (x.stage != null ? ', ' + x.stage + ' ' + esc(x.unit) : '');
+    return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.85rem;margin:4px 0"><span>${esc(x.name)} <span class="muted">(${x.km} km)</span></span><span class="status" style="background:${c[1]};white-space:nowrap">${c[0]}${detail}</span></div>`; }).join('');
+  return zone + (g ? `<div style="margin-top:14px"><b style="color:var(--ink)">Right now: river gauges nearby</b> <span class="muted" style="font-size:.8rem">(${esc((f.gauges[0] || {}).source || 'NOAA')}, live)</span></div>${g}` : '') + `<p class="muted" style="font-size:.75rem;margin-top:10px">Sources: FEMA disaster declarations and housing assistance records, FEMA National Flood Hazard Layer, NOAA National Water Prediction Service and USGS Water Services (live gauges).</p>`;
 }
 
 $('#samplebtn').onclick = async () => { if (!confirm('Clear every request and load the 6 demo requests again?')) return; $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
