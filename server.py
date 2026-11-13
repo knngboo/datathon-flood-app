@@ -542,6 +542,22 @@ def live_gauges(lat, lon):
     return sorted([g for g in near if g["km"] <= 20], key=lambda x: x["km"])[:3]
 
 
+def checked_insight(text, h):
+    """Never show an AI sentence with a made-up number: sentence 2 may not contain digits or mention FEMA."""
+    fallback1 = f"{h['county']} County has {h['total']} recorded flood events since {h.get('since')}, {h.get('last10')} of them in the last 10 years."
+    fallback2 = "Expect deep water, blocked streets and many calls at once."
+    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if p.strip()]
+    if len(parts) < 2:
+        return f"{fallback1} {fallback2}"
+    one, two = parts[0], " ".join(parts[1:])
+    if re.search(r"\d", two) or "fema" in two.lower():
+        two = fallback2
+    known = {str(h['total']), str(h.get('last10')), str(h.get('since')), str(h.get('last_year'))} | {str(v) for v in h['classes'].values()}
+    if any(n not in known for n in re.findall(r"\d+", one)):
+        one = fallback1
+    return f"{one} {two}"
+
+
 HISTORY_SUMMARY = {tuple(k.split("|")): v for k, v in CACHE.get("summaries", {}).items()}
 
 
@@ -567,11 +583,15 @@ async def api_history(request):
                  f"({h['classes']['Minor']} minor, {h['classes']['Moderate']} moderate, {h['classes']['Major']} major, {h['classes']['Severe']} severe), "
                  f"{h.get('last10')} of them in the last 10 years, most recent in {h.get('last_year')}.")
         try:
-            HISTORY_SUMMARY[key] = await run_in_threadpool(ask_ai, [
-                {"role": "system", "content": "You brief flood rescue crews. Exactly two short plain sentences, under 45 words total. First: how often and how badly this area has flooded (use the words 'flood events'). Second: what rescuers should expect on the ground now (for example deep water, blocked streets, many calls at once). Do not mention FEMA or applications in the second sentence. Never tell responders to prioritize people because they applied to FEMA in the past. Use only the numbers given. The household numbers are households that asked FEMA for help: say exactly that, never 'displaced', 'affected' or 'damaged'."},
+            text = await run_in_threadpool(ask_ai, [
+                {"role": "system", "content": "You brief flood rescue crews in plain words. Write exactly two short sentences. "
+                 "Sentence 1: summarize the flood history numbers you are given, using the words 'flood events'. "
+                 "Sentence 2: one practical warning about conditions crews should expect, such as deep water or blocked streets. "
+                 "Sentence 2 must contain no numbers."},
                 {"role": "user", "content": facts}], 120)
+            HISTORY_SUMMARY[key] = checked_insight(text, h)
         except Exception:
-            HISTORY_SUMMARY[key] = ""
+            HISTORY_SUMMARY[key] = checked_insight("", h)
         if HISTORY_SUMMARY[key]:
             CACHE.setdefault("summaries", {})["|".join(key)] = HISTORY_SUMMARY[key]
             save_cache()
