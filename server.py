@@ -440,7 +440,7 @@ def save_cache():
 
 def flood_history(lat, lon):
     key = f"{round(lat, 3)},{round(lon, 3)}"
-    if key in CACHE["history"]:
+    if key in CACHE["history"] and "classes" in (CACHE["history"][key] or {"classes": 1}):
         return CACHE["history"][key]
     h = _flood_history(lat, lon)
     CACHE["history"][key] = h
@@ -460,19 +460,24 @@ def _flood_history(lat, lon):
     for e in events:
         d = f"{e['year'] // 10 * 10}s"; decades[d] = decades.get(d, 0) + 1
     severity = []
-    if zipcode:
-        for e in [x for x in events if x["major"]][:4]:
+    graded = []
+    for e in events:
+        n = None
+        if zipcode and e["major"] and e["year"] >= 2004 and len([g for g in graded if g["households"] is not None]) < 12:
             try:
                 f = fema(zipcode, e["number"])
                 n = f["renters"]["applied"] + f["owners"]["applied"]
-                if n:
-                    severity.append({"year": e["year"], "title": e["title"], "households": n,
-                                     "approved": f["renters"]["approved_dollars"] + f["owners"]["approved_dollars"]})
             except Exception:
-                pass
+                n = None
+        cls = "Minor" if not e["major"] else "Severe" if (n or 0) >= 5000 else "Major" if (n or 0) >= 100 else "Moderate"
+        graded.append({**e, "households": n, "class": cls})
+        if n:
+            severity.append({"year": e["year"], "title": e["title"], "households": n})
+    classes = {c: sum(1 for g in graded if g["class"] == c) for c in ("Minor", "Moderate", "Major", "Severe")}
     return {"county": county, "zip": zipcode, "total": len(events), "since": min(e["year"] for e in events),
             "last10": sum(1 for e in events if e["year"] >= this_year - 10), "last_year": max(e["year"] for e in events),
-            "decades": dict(sorted(decades.items())), "severity": severity, "recent": events[:6]}
+            "decades": dict(sorted(decades.items())), "severity": severity[:6], "classes": classes,
+            "major_count": classes["Major"] + classes["Severe"], "events": graded}
 
 
 def history_points(h):
@@ -544,12 +549,13 @@ async def api_history(request):
         h["gauges"] = []
     key = (h["county"], h["zip"])
     if key not in HISTORY_SUMMARY:
-        facts = (f"{h['county']} County, Texas: {h['total']} federal flood-type disasters (floods, hurricanes, severe storms) since {h.get('since')}, "
+        facts = (f"{h['county']} County, Texas: {h['total']} federal flood-related disasters since {h.get('since')} "
+                 f"({h['classes']['Minor']} minor, {h['classes']['Moderate']} moderate, {h['classes']['Major']} major, {h['classes']['Severe']} severe), "
                  f"{h.get('last10')} in the last 10 years, most recent {h.get('last_year')}. Households in ZIP {h['zip']} that asked FEMA for help: "
                  + ("; ".join(f"{x['title']} {x['year']}: {x['households']:,}" for x in h["severity"]) or "no records") + ".")
         try:
             HISTORY_SUMMARY[key] = await run_in_threadpool(ask_ai, [
-                {"role": "system", "content": "You brief flood rescue crews. Two plain sentences: how often this area floods and how bad past floods were. Use only the numbers given. The household numbers are households that asked FEMA for help: say exactly that, never 'displaced', 'affected' or 'damaged'."},
+                {"role": "system", "content": "You brief flood rescue crews. Exactly two short plain sentences, under 45 words total: how often and how badly this area has flooded, and what responders should keep in mind now. Use only the numbers given. The household numbers are households that asked FEMA for help: say exactly that, never 'displaced', 'affected' or 'damaged'."},
                 {"role": "user", "content": facts}], 120)
         except Exception:
             HISTORY_SUMMARY[key] = ""

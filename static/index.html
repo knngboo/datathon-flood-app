@@ -70,6 +70,26 @@
   .result .pos { font-size: 1.05rem; margin: 0 0 6px; }
   .result h3 { margin: 18px 0 6px; font-size: 1rem; color: var(--ink); }
   .result p { line-height: 1.55; margin: 0; }
+  .hcard { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; background: #FBFBFC; }
+  .hhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .hhead b { font-size: 1.05rem; color: var(--text); }
+  .aipill { font-size: .78rem; font-weight: 700; color: #3B5BDB; background: #E7EEFF; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .hsub { font-size: .82rem; color: var(--muted); margin: 4px 0 12px; }
+  .htiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .htile { background: #F1F2F4; border-radius: 10px; padding: 14px 14px 12px; }
+  .htile .n { font-size: 2.1rem; font-weight: 600; color: #111827; line-height: 1.1; }
+  .htile .l { font-weight: 700; margin-top: 10px; color: #111827; }
+  .htile .s { font-size: .85rem; color: var(--muted); margin-top: 2px; }
+  .hsev { margin-top: 16px; }
+  .hsev .t { font-weight: 700; margin-bottom: 8px; color: #111827; }
+  .srow { margin: 8px 0; }
+  .srow .top { display: flex; justify-content: space-between; font-size: .92rem; }
+  .srow .top span { color: var(--muted); }
+  .track { height: 8px; background: #ECEDEF; border-radius: 999px; margin-top: 4px; overflow: hidden; }
+  .track div { height: 100%; border-radius: 999px; }
+  .hins { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
+  .hins b { color: #111827; }
+  .hins p { line-height: 1.6; margin: 6px 0 0; }
   .ai { display: inline-block; background: #6D28D9; color: #fff; font-size: .72rem; font-weight: 800; letter-spacing: .02em; padding: 2px 7px; border-radius: 5px; margin-right: 6px; vertical-align: 1px; }
   .bubble-ai { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 14px 0 4px; }
 
@@ -181,7 +201,8 @@
 <section class="view" id="view-about">
   <div class="doc">
     <h1>How Texas Flood Check works</h1>
-    <p>During a flash flood, people tell us where they are and answer six yes-or-no questions. Each request gets a priority, so responders reach the people in the most danger first. An area's flood history counts, but it never outranks someone who says they're in danger right now.</p>
+    <p>Triage analysis in a timely manner, for flood assistance. Residents submit a report with their information. The AI analyzes it and identifies how urgent it is. Each request is pushed to first responders and ranked by triage status. This improves access to assistance, reduces the load on responders, and keeps people accountable.</p>
+    <p class="muted">An area's flood history counts, but it never outranks someone who says they're in danger right now.</p>
     <h2>Where the AI is used</h2>
     <table>
       <tr><th>What (look for the <span class="ai">AI</span> tag on screen)</th><th>Why it needs AI</th></tr>
@@ -435,7 +456,6 @@ function card(r) {
 function selectReq(id, fly) {
   selId = id; const r = ROWS.find(x => x.id === id); if (!r) return;
   document.querySelectorAll('.card').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
-  if (fly) opsmap.setView([r.lat, r.lon], 13);
   const badAns = (k, a) => k === 'evacuate' ? ({ no: 'yes', yes: 'no' }[a] || a) : a;
   const ans = QUESTIONS.map(([k, q]) => `<span>${esc(q)}</span><b class="${badAns(k, r.answers[k])}">${esc(LABEL[k][r.answers[k]] || '—')}</b>`).join('');
   const h = r.history, p = PLACES && PLACES.find(x => x.id === h.id), near = p && h.km <= 3;
@@ -459,13 +479,15 @@ function selectReq(id, fly) {
       <div class="answers">${ans}</div>
       <div class="sec">Why it's ranked here</div>
       <ul class="reasons">${r.why.map(w => `<li>${esc(w)}</li>`).join('') || '<li>No urgent answers</li>'}</ul>
-      <div class="sec">Flood Frequency &amp; Severity Report</div>
+      <div class="sec">Flood history for this area</div>
       <div id="hist"><p class="muted">Loading FEMA and NOAA records for this area…</p></div>
     </div><div>
       <div class="sec" style="border-top:0;padding-top:0">Aerial photo</div>
       <div class="meta" style="margin:0 0 8px">${near ? `Closest aerial photo from a past flood: ${esc(p.place)}. ${inPhoto ? 'The red dot is where this request came from. The outlined box on the map shows the area the photo covers.' : `The request is ${h.km} km from the photo's center, just outside it. The outlined box on the map shows the photo's area.`}` : 'We show the closest aerial photo from a past flood, if one is within 3 km.'}</div>${photo}</div></div>`;
   if (window.footprint) footprint.remove();
-  window.footprint = near && p.bounds ? L.rectangle([[p.bounds[1], p.bounds[0]], [p.bounds[3], p.bounds[2]]], { color: '#13294B', weight: 2, fill: false, dashArray: '6 4' }).addTo(opsmap) : null;
+  window.footprint = near && p.bounds ? L.rectangle([[p.bounds[1], p.bounds[0]], [p.bounds[3], p.bounds[2]]], { color: '#13294B', weight: 3, fill: true, fillOpacity: 0.06, dashArray: '8 5' }).bindTooltip('Area the aerial photo covers').addTo(opsmap) : null;
+  if (window.footprint) opsmap.fitBounds(footprint.getBounds().extend([r.lat, r.lon]), { padding: [40, 40], maxZoom: 16 });
+  else opsmap.setView([r.lat, r.lon], 13);
   document.querySelectorAll('.actions button').forEach(b => b.onclick = async () => { await post(`/api/requests/${r.id}/status`, { status: b.dataset.s }); loadRows(false); });
   const cmp = $('#cmp'); if (cmp) { const s = cmp.querySelector('input'); s.oninput = () => { cmp.querySelector('.before').style.clipPath = `inset(0 ${100 - s.value}% 0 0)`; cmp.querySelector('.bar').style.left = s.value + '%'; }; }
   getJSON(`/api/history?lat=${r.lat}&lon=${r.lon}`).then(f => { if (selId === id) $('#hist').innerHTML = histReport(f); })
@@ -473,24 +495,31 @@ function selectReq(id, fly) {
 }
 
 function histReport(f) {
-  if (!f.total) return `<p class="muted">FEMA has no flood-type disaster declarations on record for ${esc(f.county)} County.</p>`;
-  const dec = Object.entries(f.decades), max = Math.max(...dec.map(([, n]) => n));
-  const bars = dec.map(([d, n]) => `<div style="display:flex;align-items:center;gap:8px;font-size:.9rem;margin:2px 0"><span style="width:52px" class="muted">${d}</span><div style="height:12px;width:${Math.max(4, n / max * 100)}%;max-width:70%;background:#64748B;border-radius:3px"></div><b>${n}</b></div>`).join('');
-  const sevMax = Math.max(1, ...f.severity.map(x => x.households));
-  const sev = f.severity.length ? `<div style="font-size:.92rem;margin:16px 0 6px"><b>Historical FEMA records detailing disaster assistance requests, documented flood events, and the severity of reported impacts within ZIP Code ${esc(f.zip)}.</b></div>` +
-    f.severity.map(x => `<div style="display:flex;align-items:center;gap:8px;font-size:.85rem;margin:3px 0"><span style="width:170px;font-size:.9rem">${esc(x.title.length > 24 ? 'Storms and flooding' : x.title)} ${x.year}</span><div style="height:12px;width:${Math.max(3, x.households / sevMax * 100)}%;max-width:45%;background:var(--ink);border-radius:3px"></div><b>${x.households.toLocaleString()}</b></div>`).join('')
-    : `<p class="muted" style="font-size:.85rem;margin-top:12px">No FEMA household records for ZIP ${esc(f.zip)} in recent floods.</p>`;
-  return `${f.summary ? `<div class="why" style="margin-top:0"><span class="ai" title="Written by the AI model from FEMA's records">AI</span>${esc(f.summary)}<div class="muted" style="font-size:.78rem;margin-top:4px">Summary written by our AI from FEMA's records below.</div></div>` : ''}
-    <div style="display:flex;gap:18px;margin:6px 0 12px"><div><b style="font-size:1.6rem;color:var(--ink)">${f.total}</b><div class="muted" style="font-size:.85rem">flood-related federal disasters in ${esc(f.county)} County since ${f.since}</div></div>
-    <div><b style="font-size:1.6rem;color:var(--ink)">${f.last10}</b><div class="muted" style="font-size:.85rem">in the last 10 years</div></div></div>
-    ${bars}${sev}${live(f)}<p class="muted" style="font-size:.75rem;margin-top:10px">Sources: FEMA disaster declarations, FEMA housing assistance records, FEMA National Flood Hazard Layer, NOAA National Water Prediction Service (live).</p>`;
+  if (!f.total) return `<p class="muted">FEMA has no flood-related disaster declarations on record for ${esc(f.county)} County.</p>${live(f)}`;
+  const C = f.classes || {}, max = Math.max(1, ...Object.values(C));
+  const COL = { Minor: '#74A3F4', Moderate: '#E0B53E', Major: '#E07E3C', Severe: '#C8443A' };
+  const rows = ['Minor', 'Moderate', 'Major', 'Severe'].map(k => `<div class="srow"><div class="top"><b style="font-weight:600">${k}</b><span>${C[k] || 0} event${C[k] === 1 ? '' : 's'}</span></div><div class="track"><div style="width:${(C[k] || 0) / max * 100}%;background:${COL[k]}"></div></div></div>`).join('');
+  const list = (f.events || []).map(e => `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.85rem;margin:3px 0"><span>${e.year}, ${esc(e.title.length > 34 ? e.title.slice(0, 32) + '…' : e.title)}</span><span class="muted" style="white-space:nowrap">${e.class}${e.households != null ? `, ${e.households.toLocaleString()} households in ${esc(f.zip)}` : ''}</span></div>`).join('');
+  return `<div class="hcard">
+    <div class="hhead"><b>Historical flood analysis</b><span class="aipill">AI-generated insight</span></div>
+    <div class="hsub">${esc(f.county)} County, Texas · ZIP ${esc(f.zip || 'unknown')} · FEMA records since ${f.since}</div>
+    <div class="htiles">
+      <div class="htile"><div class="n">${f.total}</div><div class="l">Recorded flood events</div><div class="s">FEMA flood-related disasters in ${esc(f.county)} County</div></div>
+      <div class="htile"><div class="n">${f.major_count}</div><div class="l">Major flood events</div><div class="s">100+ households in this ZIP applied to FEMA</div></div>
+    </div>
+    <div class="hsev"><div class="t">Historical flood severity</div>${rows}
+      <p class="muted" style="font-size:.78rem;margin:8px 0 0">Minor: FEMA emergency declaration only. Moderate: major disaster declared. Major: 100+ households in this ZIP applied to FEMA for help. Severe: 5,000+ applied.</p>
+      <details style="margin-top:8px"><summary style="cursor:pointer;font-size:.85rem;font-weight:600;color:var(--ink)">See every record</summary><div style="margin-top:6px">${list}</div></details>
+    </div>
+    ${f.summary ? `<div class="hins"><b>AI historical insight</b><p>${esc(f.summary)}</p></div>` : ''}
+  </div>${live(f)}`;
 }
 function live(f) {
   const GC = { no_flooding: ['No flooding', '#15803D'], action: ['Near flood stage', '#A16207'], minor: ['Minor flooding', '#C2410C'], moderate: ['Moderate flooding', '#B91C1C'], major: ['Major flooding', '#7F1D1D'] };
   const zone = f.zone ? `<div style="margin-top:14px;font-size:.9rem"><b>FEMA flood zone here:</b> ${esc(f.zone.zone)}, ${esc(f.zone.label)}</div>` : '';
   const g = (f.gauges || []).map(x => { const c = GC[x.category] || ['No data', '#6B7280'];
     return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.85rem;margin:4px 0"><span>${esc(x.name)} <span class="muted">(${x.km} km)</span></span><span class="status" style="background:${c[1]}">${c[0]}${x.stage != null ? ', ' + x.stage + ' ' + esc(x.unit) : ''}</span></div>`; }).join('');
-  return zone + (g ? `<div style="margin-top:12px;font-size:.9rem"><b>Live river gauges nearby (NOAA, right now)</b></div>${g}` : '');
+  return `<div style="margin-top:14px"><b style="color:var(--ink)">Right now</b></div>` + zone + (g ? `<div style="margin-top:8px;font-size:.9rem">Live river gauges nearby (NOAA)</div>${g}` : '') + `<p class="muted" style="font-size:.75rem;margin-top:10px">Sources: FEMA disaster declarations and housing assistance records, FEMA National Flood Hazard Layer, NOAA National Water Prediction Service.</p>`;
 }
 
 $('#samplebtn').onclick = async () => { if (!confirm('Clear every request and load the 6 demo requests again?')) return; $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
