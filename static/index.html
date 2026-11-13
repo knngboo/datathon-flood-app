@@ -126,11 +126,11 @@
 <body>
 <header>
   <a class="brand" href="#help">Texas Flood Check</a>
-  <nav><a href="#help" data-v="help">Get help</a><a href="#responders" data-v="responders">Responders</a><a href="#about" data-v="about">About</a></nav>
+  <nav><a href="#help" data-v="help">Report damage</a><a href="#responders" data-v="responders">Recovery teams</a><a href="#about" data-v="about">How it works</a></nav>
 </header>
 
 <section class="view" id="view-help">
-  <div class="alert911"><span>In danger right now? Call 911 first.</span><a href="tel:911">Call 911</a></div>
+  <div class="alert911"><span>This is for after the water goes down. In danger right now? Call 911.</span><a href="tel:911">Call 911</a></div>
   <div class="wizard">
     <div class="progress"><div id="prog"></div></div>
     <div class="stepcount"><span id="stepno"></span><button id="back" type="button">Back</button></div>
@@ -143,47 +143,55 @@
     <div class="queue">
       <div class="queuehead">
         <div class="counts" id="counts"></div>
-        <div class="qbtns"><button class="btn" id="briefbtn">Who to reach first</button><button class="btn ghost" id="samplebtn">Load demo requests</button></div>
+        <div class="qbtns"><button class="btn" id="briefbtn">Where to send teams first</button><button class="btn ghost" id="samplebtn">Load demo reports</button></div>
         <div class="why" id="brief" hidden></div>
       </div>
       <div id="cards"></div>
     </div>
-    <div class="side"><div id="opsmap"></div><div class="detail" id="detail"><p class="muted">Select a request to see why it's ranked there.</p></div></div>
+    <div class="side"><div id="opsmap"></div><div class="detail" id="detail"><p class="muted">Select a report to see why it's ranked there.</p></div></div>
   </div>
 </section>
 
 <section class="view" id="view-about">
   <div class="doc">
     <h1>How Texas Flood Check works</h1>
-    <p>During a flash flood, people send their location and answer six questions. Every request is ranked so responders reach the people in the most danger first. Flood history for that spot counts, but it never outranks someone who says they are in danger now.</p>
-    <h2>How a request is ranked</h2>
+    <p>After a flood, the hardest part for a recovery team is knowing which homes need help first, and which reports are real. Residents report damage at their address in a few taps. Our AI checks each report against the aerial photo NOAA took of that spot after the flood. Recovery teams see every report on a map, ranked, with the photo proof next to it. Residents get a case number and the FEMA help they can apply for.</p>
+    <h2>Where the AI is used</h2>
     <table>
-      <tr><th>What the person tells us</th><th>Yes</th><th>Not sure</th></tr>
-      <tr><td>In immediate danger</td><td>40</td><td>20</td></tr>
-      <tr><td>Trapped</td><td>30</td><td>15</td></tr>
-      <tr><td>Someone is injured</td><td>25</td><td>12</td></tr>
-      <tr><td>Water is rising</td><td>15</td><td>8</td></tr>
-      <tr><td>Can't leave safely on their own (answered No)</td><td>15</td><td>8</td></tr>
-      <tr><td>Someone elderly or disabled with them</td><td>10</td><td>5</td></tr>
-      <tr><td>Each extra person, up to 4</td><td colspan="2">2 each</td></tr>
-      <tr><td>Past flooding photographed within 3 km / 10 km</td><td colspan="2">6 / 3</td></tr>
+      <tr><th>What</th><th>Why it needs AI</th></tr>
+      <tr><td>Checking each report against the aerial photo of that spot</td><td>Reading a photo for floodwater and damage is something only a vision model can do. Our model (Qwen3-VL-8B) runs on the Dell Pro Max GB10 at our table.</td></tr>
+      <tr><td>"Where to send teams first" summary</td><td>Turns a long list into a short plan a team lead can read in seconds.</td></tr>
     </table>
-    <p class="muted" style="margin-top:10px">Critical: in immediate danger, or trapped with water rising, or 60 points and up. High: 35 and up. Medium: 15 and up. Low: below 15.</p>
+    <p class="muted" style="margin-top:10px">Everything else is plain code: the ranking points below, the map, and the FEMA lists.</p>
+    <h2>How a report is ranked</h2>
+    <table>
+      <tr><th>What the resident tells us</th><th>Points</th></tr>
+      <tr><td>Water got inside (not sure: 15)</td><td>30</td></tr>
+      <tr><td>How deep: ankle / knee / waist or higher</td><td>10 / 20 / 35</td></tr>
+      <tr><td>Can't stay home tonight (not sure: 12)</td><td>25</td></tr>
+      <tr><td>Elderly, disabled or a baby at home</td><td>15</td></tr>
+      <tr><td>Needs a place to stay</td><td>15</td></tr>
+      <tr><td>Each extra person, up to 4</td><td>2 each</td></tr>
+      <tr><td>Aerial photo confirms flooding / shows none</td><td>+15 / -10</td></tr>
+    </table>
+    <p class="muted" style="margin-top:10px">Urgent: 70 and up. High: 45 and up. Medium: 20 and up. Low: below 20. A report the photo contradicts isn't thrown out; it's marked "check first."</p>
     <h2>Where the data comes from</h2>
     <table>
-      <tr><th>Data</th><th>What it shows</th><th>Source</th></tr>
-      <tr><td>After-flood aerial photos</td><td>Hurricane Harvey (Aug 2017) and the Texas Hill Country flood (July 2025)</td><td><a href="https://storms.ngs.noaa.gov/" target="_blank">NOAA emergency response imagery</a></td></tr>
-      <tr><td>Before-flood aerial photos</td><td>The same places in 2016</td><td>USDA National Agriculture Imagery Program</td></tr>
-      <tr><td>Photo details</td><td>Rainfall, height above sea level, recorded flood lines</td><td>Weather stations, USGS and U.S. Census, via the organizers' <a href="https://huggingface.co/datasets/jennifer-fowler/UTSA-flood-images" target="_blank">dataset</a></td></tr>
-      <tr><td>Flood check on each photo</td><td>Whether water covers ground that was dry before</td><td>A photo-reading AI model running on the Dell Pro Max GB10 at our table</td></tr>
-      <tr><td>Addresses and street names</td><td>Turning what you type or tap into a location</td><td>OpenStreetMap (Photon and Nominatim)</td></tr>
+      <tr><th>Data</th><th>Source</th></tr>
+      <tr><td>Aerial photos after the flood</td><td><a href="https://storms.ngs.noaa.gov/" target="_blank">NOAA emergency response imagery</a> (Harvey 2017, Hill Country 2025)</td></tr>
+      <tr><td>Aerial photos before the flood</td><td>USDA National Agriculture Imagery Program (2016)</td></tr>
+      <tr><td>Photo collection for this event</td><td>Organizers' <a href="https://huggingface.co/datasets/jennifer-fowler/UTSA-flood-images" target="_blank">Hugging Face dataset</a></td></tr>
+      <tr><td>Households that asked FEMA for help, by ZIP code</td><td>FEMA OpenFEMA housing assistance records (disasters 4332 and 4879)</td></tr>
+      <tr><td>The help residents can apply for</td><td>FEMA Individuals and Households Program, DisasterAssistance.gov</td></tr>
+      <tr><td>Addresses and street names</td><td>OpenStreetMap</td></tr>
+      <tr><td>Reports</td><td>Saved as one line each in a file on the Dell. No database, because a one-day demo doesn't need one.</td></tr>
     </table>
     <h2>What it can't do</h2>
     <div class="limits">
-      <div>It is a student prototype, not a real emergency service. Anyone in danger should call 911.</div>
-      <div>The aerial photos show past floods, not what is happening right now.</div>
-      <div>The AI's flood check is a second opinion for responders to verify, not a decision.</div>
-      <div>A river, pond or pool can look like flooding from the air, and the before and after photos are a year apart.</div>
+      <div>It's a student prototype, not a real FEMA or county system. In danger, call 911.</div>
+      <div>The photos are from past floods, so the demo replays Hurricane Harvey as if it just happened.</div>
+      <div>The AI's photo check is evidence for the team to look at, not a decision.</div>
+      <div>A river, pond or pool can look like flooding from the air.</div>
     </div>
   </div>
 </section>
@@ -194,8 +202,8 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
 const ATTR = 'Esri, OpenStreetMap contributors';
-const LVL = { Critical: '#B91C1C', High: '#C2410C', Medium: '#A16207', Low: '#15803D' };
-const ST = { 'Open': '#4B5563', 'On the way': '#1D4ED8', 'Resolved': '#15803D' };
+const LVL = { Urgent: '#B91C1C', High: '#C2410C', Medium: '#A16207', Low: '#15803D' };
+const ST = { 'New': '#4B5563', 'Team assigned': '#1D4ED8', 'Done': '#15803D' };
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Something went wrong. Try again.'); return j;
@@ -213,16 +221,18 @@ function route() {
 window.addEventListener('hashchange', route);
 
 /* ================= GET HELP ================= */
+const YN = [['yes', 'Yes'], ['no', 'No'], ['unsure', 'Not sure']];
 const QUESTIONS = [
-  ['danger', 'Are you in immediate danger?', 'For example, water inside your home or car, or no safe place to go.'],
-  ['rising', 'Is the water rising where you are?', ''],
-  ['trapped', 'Are you trapped?', 'You can\'t leave because water or debris is blocking the way.'],
-  ['injured', 'Is anyone with you injured?', ''],
-  ['evacuate', 'Can you leave safely on your own?', 'Only say yes if the way out has no moving water.'],
-  ['vulnerable', 'Is anyone with you elderly or disabled?', 'Or a baby, or anyone who needs help moving.'],
+  ['water_inside', 'Did floodwater get inside your home?', 'Pick one.', YN],
+  ['depth', 'How deep did the water get inside?', 'Your best guess is fine.', [['ankle', 'Ankle deep (under 1 foot)'], ['knee', 'Knee deep (1 to 3 feet)'], ['waist', 'Waist deep or higher (over 3 feet)'], ['unsure', 'Not sure']]],
+  ['stay', 'Can you safely stay in your home tonight?', 'Think power, water, mold and a dry place to sleep.', YN],
+  ['need', 'What do you need most right now?', 'Pick the one that matters most.', [['stay', 'A place to stay'], ['cleanup', 'Help cleaning out the house'], ['repairs', 'Repairs'], ['supplies', 'Food, water or medicine'], ['none', 'Nothing right now']]],
+  ['vulnerable', 'Is anyone in your home elderly, disabled, or a baby?', '', [['yes', 'Yes'], ['no', 'No']]],
+  ['tenure', 'Do you rent or own your home?', 'This decides which help you can apply for.', [['rent', 'I rent'], ['own', 'I own']]],
 ];
+const LABEL = Object.fromEntries(QUESTIONS.map(([k, , , o]) => [k, Object.fromEntries(o)]));
 const S = { step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, done: null };
-const TOTAL = QUESTIONS.length + 2;
+const TOTAL = QUESTIONS.length + 3;
 let pinmap, pickmap, pin;
 
 function renderStep() {
@@ -233,16 +243,20 @@ function renderStep() {
   if (S.done) return renderDone(box);
   if (S.step === 0) return renderWhere(box);
   if (S.step <= QUESTIONS.length) {
-    const [key, q, hint] = QUESTIONS[S.step - 1];
-    box.innerHTML = `<h1 class="q">${q}</h1><p class="hint">${hint || 'Pick one.'}</p><div class="choices">` +
-      [['yes', 'Yes'], ['no', 'No'], ['unsure', 'Not sure']].map(([v, l]) => `<button class="choice ${S.answers[key] === v ? 'picked' : ''}" data-v="${v}">${l}</button>`).join('') + '</div>';
-    box.querySelectorAll('.choice').forEach(b => b.onclick = () => { S.answers[key] = b.dataset.v; S.step++; renderStep(); });
+    const [key, q, hint, opts] = QUESTIONS[S.step - 1];
+    box.innerHTML = `<h1 class="q">${q}</h1><p class="hint">${hint || '&nbsp;'}</p><div class="choices">` +
+      opts.map(([v, l]) => `<button class="choice ${S.answers[key] === v ? 'picked' : ''}" data-v="${v}">${l}</button>`).join('') + '</div>';
+    box.querySelectorAll('.choice').forEach(b => b.onclick = () => {
+      S.answers[key] = b.dataset.v;
+      if (key === 'water_inside' && b.dataset.v === 'no') { S.answers.depth = ''; S.step += 2; } else S.step++;
+      renderStep(); });
     box.querySelector('.choice').focus();
     return;
   }
-  renderSend(box);
+  if (S.step === QUESTIONS.length + 1) return renderPeople(box);
+  renderReview(box);
 }
-$('#back').onclick = () => { if (S.step > 0) { S.step--; renderStep(); } };
+$('#back').onclick = () => { if (S.step > 0) { S.step--; if (S.step === 2 && S.answers.water_inside === 'no') S.step = 1; renderStep(); } };
 
 function renderWhere(box) {
   box.innerHTML = `<h1 class="q">Where are you?</h1>
@@ -314,36 +328,51 @@ function showChosen() {
   $('#next').focus();
 }
 
-function renderSend(box) {
-  box.innerHTML = `<h1 class="q">How many people are with you?</h1><p class="hint">Count yourself too.</p>
+function renderPeople(box) {
+  box.innerHTML = `<h1 class="q">How many people live in your home?</h1><p class="hint">Count yourself too.</p>
     <div class="stepper"><button type="button" id="minus" aria-label="Fewer people">−</button><span id="ppl">${S.people}</span><button type="button" id="plus" aria-label="More people">+</button></div>
-    <label class="field">Your first name (optional)<input id="nm" autocomplete="given-name"></label>
-    <label class="field">Phone number so responders can reach you (optional)<input id="ph" type="tel" autocomplete="tel"></label>
-    <label class="field">Language for your instructions<select id="lg"><option>English</option><option>Spanish</option></select></label>
-    <button class="btn send" id="sendbtn">Send for help</button><p class="hint" id="senderr" style="margin-top:12px"></p>`;
+    <label class="field">Your first name (optional)<input id="nm" autocomplete="given-name" value="${esc(S.name || '')}"></label>
+    <label class="field">Phone number so a team can reach you (optional)<input id="ph" type="tel" autocomplete="tel" value="${esc(S.phone || '')}"></label>
+    <button class="btn" id="toreview" style="width:100%">Review my report</button>`;
   $('#minus').onclick = () => { S.people = Math.max(1, S.people - 1); $('#ppl').textContent = S.people; };
   $('#plus').onclick = () => { S.people = Math.min(50, S.people + 1); $('#ppl').textContent = S.people; };
+  $('#toreview').onclick = () => { S.name = $('#nm').value.trim(); S.phone = $('#ph').value.trim(); S.step++; renderStep(); };
+}
+
+function renderReview(box) {
+  const rows = [['Address', S.label]].concat(QUESTIONS.filter(([k]) => S.answers[k]).map(([k, q]) => [q, LABEL[k][S.answers[k]]]))
+    .concat([['People in the home', S.people], ['Name', S.name || 'not given'], ['Phone', S.phone || 'not given']]);
+  box.innerHTML = `<h1 class="q">Check your report</h1><p class="hint">Nothing is sent until you press Send.</p>
+    <div class="answers" style="margin-bottom:22px">${rows.map(([q, a]) => `<span class="muted">${esc(q)}</span><b>${esc(a)}</b>`).join('')}</div>
+    <button class="btn send" id="sendbtn">Send report</button>
+    <p style="margin-top:12px"><button class="link" id="fix" type="button" style="font:inherit;background:none;border:0;color:var(--ink);font-weight:700;text-decoration:underline;cursor:pointer">Change my answers</button></p>
+    <p class="hint" id="senderr"></p>`;
+  $('#fix').onclick = () => { S.step = 1; renderStep(); };
   $('#sendbtn').onclick = async () => {
-    $('#sendbtn').disabled = true; $('#sendbtn').textContent = 'Sending… about 10 seconds';
+    $('#sendbtn').disabled = true; $('#sendbtn').textContent = 'Sending and checking the aerial photo… about 10 seconds';
     try {
-      S.done = await post('/api/request', { lat: S.lat, lon: S.lon, label: S.label, answers: S.answers, people: S.people,
-        name: $('#nm').value.trim(), phone: $('#ph').value.trim(), lang: $('#lg').value });
+      S.done = await post('/api/request', { lat: S.lat, lon: S.lon, label: S.label, answers: S.answers, people: S.people, name: S.name, phone: S.phone });
       renderStep();
-    } catch (e) { $('#senderr').textContent = e.message; $('#sendbtn').disabled = false; $('#sendbtn').textContent = 'Send for help'; }
+    } catch (e) { $('#senderr').textContent = e.message; $('#sendbtn').disabled = false; $('#sendbtn').textContent = 'Send report'; }
   };
 }
 
 function renderDone(box) {
   const d = S.done, c = LVL[d.level];
+  const v = d.verdict === 'Yes' ? ['Flooding seen', 'var(--critical)'] : d.verdict === 'No' ? ['No flooding seen', 'var(--low)'] : d.verdict ? ['Unclear', 'var(--medium)'] : null;
+  const photo = v
+    ? `<h3>What the aerial photo shows near you</h3><p><span class="status" style="background:${v[1]}">${v[0]}</span> ${esc(d.verdict_text)}</p><p class="muted" style="font-size:.85rem;margin-top:6px">AI check of NOAA's aerial photo of ${esc(d.photo_place)}, ${d.photo_km} km from your address.</p>`
+    : `<h3>Aerial photo</h3><p class="muted">We don't have an aerial photo within 3 km of your address, so a team will check in person.</p>`;
   box.innerHTML = `<div class="result" style="border-left-color:${c}">
-      <h2>Help request sent</h2>
-      <p class="pos">Priority <b style="color:${c}">${d.level}</b>. You are number <b>${d.position}</b> on the responders' list.</p>
-      <p class="muted">Location: ${esc(S.label)}</p>
-      <h3>What to do right now</h3><p>${esc(d.guidance)}</p>
-      <h3>What happens next</h3><p>Responders work from the top of the list down. If things get worse, send a new request with your new answers, or call 911.</p>
+      <h2>Report received</h2>
+      <p class="pos">Your case number is <b>${d.id}</b>. Keep it.</p>
+      <p>Priority for recovery teams: <b style="color:${c}">${d.level}</b>. You are number <b>${d.position}</b> on their list.</p>
+      ${photo}
+      <h3>Help you can apply for now</h3><ul style="margin:0;padding-left:20px;line-height:1.6">${d.help.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+      <p style="margin-top:10px"><b>${esc(d.apply)}</b></p>
     </div>
-    <p style="margin-top:18px"><button class="btn ghost" id="again">Send a new request</button></p>`;
-  $('#again').onclick = () => { Object.assign(S, { step: 1, answers: {}, people: 1, done: null }); renderStep(); };
+    <p style="margin-top:18px"><button class="btn ghost" id="again">Report a different home</button></p>`;
+  $('#again').onclick = () => { Object.assign(S, { step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, name: '', phone: '', done: null }); pinmap = null; pickmap = null; renderStep(); };
 }
 
 /* ================= RESPONDERS ================= */
@@ -356,22 +385,22 @@ async function openOps() {
 }
 async function loadRows(fit) {
   ROWS = await getJSON('/api/requests');
-  const open = ROWS.filter(r => r.status !== 'Resolved'), n = f => open.filter(f).length;
-  $('#counts').innerHTML = [['Open', open.length, '#13294B'], ['Critical', n(r => r.level === 'Critical'), LVL.Critical], ['High', n(r => r.level === 'High'), LVL.High], ['On the way', n(r => r.status === 'On the way'), ST['On the way']]]
+  const open = ROWS.filter(r => r.status !== 'Done'), n = f => open.filter(f).length;
+  $('#counts').innerHTML = [['Open', open.length, '#13294B'], ['Urgent', n(r => r.level === 'Urgent'), LVL.Urgent], ['High', n(r => r.level === 'High'), LVL.High], ['Team assigned', n(r => r.status === 'Team assigned'), ST['Team assigned']]]
     .map(([l, v, c]) => `<div class="count"><b style="color:${c}">${v}</b><span>${l}</span></div>`).join('');
-  $('#cards').innerHTML = ROWS.length ? ROWS.map(card).join('') : '<div class="empty">No requests yet. Send one from Get help, or load demo requests.</div>';
+  $('#cards').innerHTML = ROWS.length ? ROWS.map(card).join('') : '<div class="empty">No reports yet. Send one from Report damage, or load demo reports.</div>';
   document.querySelectorAll('.card').forEach(el => el.onclick = () => selectReq(el.dataset.id, true));
   Object.values(markers).forEach(m => m.remove()); markers = {};
-  ROWS.forEach(r => { const done = r.status === 'Resolved';
+  ROWS.forEach(r => { const done = r.status === 'Done';
     markers[r.id] = L.circleMarker([r.lat, r.lon], { radius: done ? 6 : 10, weight: 3, color: '#fff', fillColor: done ? '#9CA3AF' : LVL[r.level], fillOpacity: 1 })
-      .bindTooltip(`${r.id}: ${r.level}${done ? ' (resolved)' : ''}`).on('click', () => selectReq(r.id, false)).addTo(opsmap); });
+      .bindTooltip(`${r.id}: ${r.level}${done ? ' (done)' : ''}`).on('click', () => selectReq(r.id, false)).addTo(opsmap); });
   if (fit && ROWS.length) opsmap.fitBounds(ROWS.map(r => [r.lat, r.lon]), { padding: [40, 40], maxZoom: 12 });
   if (!selId && ROWS.length) selId = ROWS[0].id;
   if (selId && ROWS.find(r => r.id === selId)) selectReq(selId, false);
 }
 function card(r) {
   const flags = r.why.map(w => `<span class="flag">${esc(w)}</span>`).join('') + `<span class="flag">${r.people} ${r.people === 1 ? 'person' : 'people'}</span>`;
-  return `<div class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Resolved' ? 'done' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
+  return `<div class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Done' ? 'done' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
     <div class="cardtop"><span class="lvl" style="color:${LVL[r.level]}">${r.level}</span><span class="status" style="background:${ST[r.status]}">${r.status}</span></div>
     <div class="meta">${r.id}, sent ${esc(r.time)}${r.name ? ', ' + esc(r.name) : ''}${r.sample ? ', demo' : ''}</div>
     <div class="where">${esc(r.label)}</div><div class="flags">${flags}</div></div>`;
@@ -380,27 +409,32 @@ function selectReq(id, fly) {
   selId = id; const r = ROWS.find(x => x.id === id); if (!r) return;
   document.querySelectorAll('.card').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
   if (fly) opsmap.setView([r.lat, r.lon], 13);
-  const A = { danger: 'In immediate danger', rising: 'Water rising', trapped: 'Trapped', injured: 'Someone injured', evacuate: 'Can leave safely', vulnerable: 'Elderly or disabled with them' };
-  const ans = Object.entries(A).map(([k, l]) => { const v = r.answers[k] || 'no answer'; return `<span>${l}</span><span class="${v}">${v === 'unsure' ? 'not sure' : v}</span>`; }).join('');
-  const h = r.history, p = PLACES && PLACES.find(x => x.id === h.id), near = p && h.km <= 10;
+  const ans = QUESTIONS.filter(([k]) => r.answers[k]).map(([k, q]) => `<span>${esc(q)}</span><b>${esc(LABEL[k][r.answers[k]] || r.answers[k])}</b>`).join('');
+  const h = r.history, p = PLACES && PLACES.find(x => x.id === h.id), near = p && h.km <= 3;
   const yr = d => esc(String(d).slice(0, 4));
+  const v = r.verdict === 'Yes' ? ['Flooding seen', LVL.Urgent] : r.verdict === 'No' ? ['No flooding seen', LVL.Low] : r.verdict ? ['Unclear', LVL.Medium] : null;
   const photo = near ? (p.before
-      ? `<div class="compare" id="cmp"><img src="/img/${p.id}?w=520" alt="After the flood"><img class="before" src="/img/${p.before}?w=520" alt="Before the flood" style="clip-path:inset(0 50% 0 0)"><div class="bar"></div><input type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div><div class="caps"><span>Before, ${yr(p.before_date)}</span><span>Drag to compare</span><span>After, ${yr(p.date)}</span></div>`
-      : `<div class="compare"><img src="/img/${p.id}?w=520" alt="After the flood"></div><div class="caps"><span>After, ${yr(p.date)}</span><span>No before photo for this spot</span></div>`)
-      + `<button class="btn ghost" id="aicheck" style="width:100%">Check this photo for flooding</button><div class="why" id="aiout" hidden></div>`
-    : '<p class="muted">No aerial flood photos within 10 km of this request.</p>';
+      ? `<div class="compare" id="cmp"><img src="/img/${p.id}?w=520" alt="After the flood"><img class="before" src="/img/${p.before}?w=520" alt="Before the flood" style="clip-path:inset(0 50% 0 0)"><div class="bar"></div><input type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div><div class="caps"><span>Before, ${yr(p.before_date)} (USDA)</span><span>Drag to compare</span><span>After, ${yr(p.date)} (NOAA)</span></div>`
+      : `<div class="compare"><img src="/img/${p.id}?w=520" alt="After the flood"></div><div class="caps"><span>After, ${yr(p.date)} (NOAA)</span></div>`)
+      + (v ? `<div class="why"><span class="status" style="background:${v[1]}">AI photo check: ${v[0]}</span> ${esc(r.verdict_text)}</div>` : '')
+    : '<p class="muted">No aerial photo within 3 km of this address. Check in person.</p>';
+  const actions = [['New', 'Mark new'], ['Team assigned', 'Assign a team'], ['Done', 'Mark done']].filter(([s]) => s !== r.status)
+    .map(([s, l], i) => `<button class="btn ${i ? 'ghost' : ''}" data-s="${s}">${l}</button>`).join('');
   $('#detail').innerHTML = `<h2>${r.id}: <span style="color:${LVL[r.level]}">${r.level}</span> <span class="muted" style="font-weight:500;font-size:1rem">${r.score} points</span></h2>
     <div class="meta">Sent ${esc(r.time)}. ${esc(r.label)}. ${r.people} ${r.people === 1 ? 'person' : 'people'}${r.phone ? '. Phone ' + esc(r.phone) : ''}${r.name ? '. ' + esc(r.name) : ''}.</div>
     <div class="dgrid"><div>
-      ${r.reason ? `<div class="why"><b>Why:</b> ${esc(r.reason)}</div>` : ''}
+      <div class="why"><b>Why it's ranked here:</b> ${esc(r.why.join(', ') || 'no urgent answers')}.</div>
       <div class="answers">${ans}</div>
-      <div class="why" style="margin-top:14px">Past flooding nearby: ${esc(h.event)} aerial photo ${h.km} km away${h.rain ? `, ${esc(h.rain)} of rain the week before` : ''}. Adds ${r.flood_pts} of the ${r.score} points.</div>
-      <div class="actions">${r.status !== 'On the way' ? '<button class="btn" data-s="On the way">Mark on the way</button>' : ''}${r.status !== 'Resolved' ? '<button class="btn ghost" data-s="Resolved">Mark resolved</button>' : ''}${r.status !== 'Open' ? '<button class="btn ghost" data-s="Open">Reopen</button>' : ''}</div>
-    </div><div><b style="color:var(--ink)">Aerial photo of the area</b>${near ? `<div class="meta" style="margin:2px 0 8px">${esc(p.place)}, ${h.km} km from this request</div>` : ''}${photo}</div></div>`;
+      <div class="why" id="femaline" style="margin-top:14px">Loading FEMA records for this ZIP code…</div>
+      <div class="actions">${actions}</div>
+    </div><div><b style="color:var(--ink)">Aerial photo of this address</b>${near ? `<div class="meta" style="margin:2px 0 8px">${esc(p.place)}, ${h.km} km away</div>` : ''}${photo}</div></div>`;
   document.querySelectorAll('.actions button').forEach(b => b.onclick = async () => { await post(`/api/requests/${r.id}/status`, { status: b.dataset.s }); loadRows(false); });
   const cmp = $('#cmp'); if (cmp) { const s = cmp.querySelector('input'); s.oninput = () => { cmp.querySelector('.before').style.clipPath = `inset(0 ${100 - s.value}% 0 0)`; cmp.querySelector('.bar').style.left = s.value + '%'; }; }
-  const ai = $('#aicheck'); if (ai) ai.onclick = async () => { const o = $('#aiout'); o.hidden = false; o.textContent = 'Checking the photo… about 10 seconds.'; ai.disabled = true;
-    try { o.textContent = (await post('/api/ask', { id: p.id, question: 'Is floodwater covering normally dry land? Give one visible clue.', history: [] })).answer; } catch (e) { o.textContent = e.message; } ai.disabled = false; };
+  getJSON(`/api/fema?event=${h.event_key || 'harvey'}&lat=${r.lat}&lon=${r.lon}`).then(f => {
+    if (selId !== id) return;
+    const t = f.renters.applied + f.owners.applied;
+    $('#femaline').innerHTML = t ? `FEMA records, ZIP ${f.zip}, ${esc(f.title)}: <b>${t.toLocaleString()}</b> households asked for help (${f.renters.applied.toLocaleString()} renters, ${f.owners.applied.toLocaleString()} owners).` : `FEMA has no housing-help records for ZIP ${f.zip}.`;
+  }).catch(e => { if (selId === id) $('#femaline').textContent = 'FEMA records unavailable right now.'; });
 }
 $('#samplebtn').onclick = async () => { $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
 $('#briefbtn').onclick = async () => { const o = $('#brief'); o.hidden = false; o.textContent = 'Reading the open requests… about 10 seconds.'; $('#briefbtn').disabled = true;
