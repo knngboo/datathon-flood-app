@@ -244,15 +244,18 @@ async def api_geo(request):
     q = request.query_params.get("q", "").strip()[:120]
     if len(q) < 3:
         return JSONResponse({"error": "Type at least a street, town or ZIP code."}, status_code=400)
-    try:
-        hits = await run_in_threadpool(suggest, q)
-    except Exception:
-        hits = []  # OpenStreetMap's full search is busy or rate-limited: fall back to the other address service
-    if not hits:
+    import asyncio
+
+    async def safe(fn):
         try:
-            hits = await run_in_threadpool(photon, q)
+            return await asyncio.wait_for(run_in_threadpool(fn, q), timeout=12)
         except Exception:
-            return JSONResponse({"error": "Address search isn't reachable right now. Use your current location or pick on a map."}, status_code=502)
+            return None
+    # Ask both address services at once: Nominatim is better for exact house numbers, Photon is faster and never rate-limits us.
+    full, quick = await asyncio.gather(safe(suggest), safe(photon))
+    hits = full or quick or []
+    if full is None and quick is None:
+        return JSONResponse({"error": "Address search isn't reachable right now. Use your current location or pick on a map."}, status_code=502)
     if not hits:
         return JSONResponse({"error": f"No match for \"{q}\" in Texas. Try the street and town, or a ZIP code."}, status_code=404)
     for h in hits:
