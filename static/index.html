@@ -314,7 +314,7 @@ function renderStep() {
   $('#stepno').textContent = S.done ? 'Request sent' : S.step === 0 ? 'First, your location' : S.step <= QUESTIONS.length ? `Question ${S.step} of ${QUESTIONS.length}` : S.step === QUESTIONS.length + 1 ? 'Almost done' : 'Last step: review';
   $('#back').style.visibility = S.step > 0 && !S.done ? 'visible' : 'hidden';
   const box = $('#step');
-  if (S.done) return renderDone(box);
+  if (S.done) { window.scrollTo(0, 0); return renderDone(box); }
   if (S.step === 0) return renderWhere(box);
   if (S.step <= QUESTIONS.length) {
     const [key, q, hint, opts] = QUESTIONS[S.step - 1];
@@ -491,7 +491,7 @@ async function loadRows(fit, auto) {
     if (a && b && JSON.stringify(a) !== JSON.stringify(b)) selectReq(selId, false, true);
     return; }
   if (!selId && ROWS.length) selId = ROWS[0].id;
-  if (selId && ROWS.find(r => r.id === selId)) selectReq(selId, false);
+  if (selId && ROWS.find(r => r.id === selId)) selectReq(selId, false, fit);
 }
 function card(r) {
   const hs = HOT.find(h => h.ids.includes(r.id));

@@ -814,7 +814,7 @@ def _seed(reset):
     ids = ids + [ids[0], ids[0]]  # two more near the first spot, so the demo has a real hotspot
     for i, ((a, people), pid) in enumerate(zip(SAMPLES, ids)):
         p = place(pid)
-        lat, lon = p["lat"] + rng.uniform(-.006, .006), p["lon"] + rng.uniform(-.006, .006)
+        lat, lon = p["lat"] + rng.uniform(-.0015, .0015), p["lon"] + rng.uniform(-.0015, .0015)  # stays inside the photo (~500 m across)
         r = make_report(lat, lon, f"Near {p['place']}", a, people, "", "", True, (p["lat"], p["lon"]))
         r["id"] = f"R{len(rows) + 1:03d}"
         rows.append(r)
