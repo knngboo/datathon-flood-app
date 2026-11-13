@@ -11,7 +11,6 @@ import urllib.request
 from pathlib import Path
 
 import pandas as pd
-import pydeck as pdk
 import streamlit as st
 
 DATA = Path(__file__).parent / "data"
@@ -90,6 +89,7 @@ def color_scale(values):
 
 
 def polygon_map(gj, df, metric, tooltip_cols):
+    import pydeck as pdk
     gj = json.loads(json.dumps(gj))
     cols = color_scale(df[metric])
     for f, c, (_, row) in zip(gj["features"], cols, df.iterrows()):
@@ -112,7 +112,7 @@ def lat_lon_cols(df):
 
 
 # ---------- pages ----------
-page = st.sidebar.radio("Page", ["Flood photos", "Explore any data", "311 by neighborhood", "AI helper"])
+page = st.sidebar.radio("Page", ["Flood photos", "Recovery Prioritization", "Explore any data", "311 by neighborhood", "AI helper"])
 with st.sidebar.expander("Vision AI server (from the organizers)", expanded=not VLM["key"]):
     VLM["url"] = st.text_input("Server URL (ends in /v1)", VLM["url"])
     VLM["model"] = st.text_input("Model", VLM["model"])
@@ -125,7 +125,7 @@ if not ok and names:
 if page == "Flood photos":
     st.title("Ask the vision AI about many photos at once")
     guess = next((str(d) for d in [Path.home() / "Texas_Flood_Student_Data", Path(__file__).parent.parent / "Texas_Flood_Student_Data",
-                                   Path.home() / "GB10competition" / "datasets"] if d.exists()), str(Path.home()))
+                                   Path.home() / "GB10competition" / "datasets"] if d.exists()), str(Path.home() / "Texas_Flood_Student_Data"))
     folder = Path(st.text_input("Folder with the photos (looks inside subfolders too)", guess)).expanduser()
     imgs = sorted(p for p in folder.rglob("*") if p.suffix.lower() in IMG_EXT and ".ipynb_checkpoints" not in str(p)) if folder.is_dir() else []
     st.write(f"**{len(imgs)} photos found**")
@@ -134,10 +134,11 @@ if page == "Flood photos":
     if metas:
         meta = pd.read_csv(metas[0])
         with st.expander(f"Photo details from {metas[0].name}: {len(meta)} rows"):
-            st.dataframe(meta.head(200), width="stretch")
+            st.dataframe(meta.head(200), use_container_width=True)
     q = st.text_area("Question for every photo",
                      "Is floodwater visibly covering normally dry land? Answer yes, no, or uncertain, then give one visible clue.")
-    n = st.slider("How many photos (start small, each takes a few seconds)", 1, max(1, len(imgs)), min(10, max(1, len(imgs))))
+    n = (st.slider("How many photos (start small, each takes a few seconds)", 1, len(imgs), min(10, len(imgs)))
+         if len(imgs) > 1 else len(imgs))
     if st.button("Run") and imgs:
         rows, bar = [], st.progress(0.0)
         for i, img in enumerate(imgs[:n]):
@@ -159,7 +160,7 @@ if page == "Flood photos":
                     res = res.merge(meta.assign(_k=vals), left_on=key, right_on="_k", how="left").drop(columns="_k")
                     break
         st.bar_chart(res["label"].value_counts())
-        st.dataframe(res.drop(columns=["path"]), width="stretch")
+        st.dataframe(res.drop(columns=["path"]), use_container_width=True)
         st.download_button("Download the answers (CSV)", res.drop(columns=["path"]).to_csv(index=False), "answers.csv")
         if (ll := lat_lon_cols(res)) is not None:
             pts = res[[ll[0], ll[1], "label"]].dropna().rename(columns={ll[0]: "lat", ll[1]: "lon"})
@@ -172,23 +173,31 @@ if page == "Flood photos":
             st.write(ask_vlm("Sum up these photo answers for a city emergency manager in under 150 words. "
                              "Use only what is here.\n\n" + res[["file", "answer"]].to_csv(index=False), max_tokens=400))
 
+elif page == "Recovery Prioritization":
+    from recovery.ui import render
+    render(VLM)
+
 elif page == "Explore any data":
     st.title("Explore any data")
     files = sorted(p.name for p in DATA.glob("*") if p.suffix in (".csv", ".geojson"))
     up = st.file_uploader("Drop in the file they hand out (CSV)", type=["csv"])
     if up is not None:
+        DATA.mkdir(parents=True, exist_ok=True)
         (DATA / up.name).write_bytes(up.getvalue())
         files = sorted(set(files) | {up.name})
+    if not files:
+        st.info("No datasets loaded yet. Upload a CSV to explore it.")
+        st.stop()
     name = st.selectbox("File", files, index=files.index(up.name) if up is not None else 0)
     df, gj = load(str(DATA / name))
     st.write(f"**{len(df):,} rows, {len(df.columns)} columns**")
-    st.dataframe(df.head(200), width="stretch")
+    st.dataframe(df.head(200), use_container_width=True)
 
     with st.expander("Every column: type, how many blank, example"):
         st.dataframe(pd.DataFrame({
             "type": df.dtypes.astype(str), "blank": df.isna().sum(),
             "different values": df.nunique(), "example": df.iloc[0].astype(str) if len(df) else None,
-        }), width="stretch")
+        }), use_container_width=True)
 
     c1, c2 = st.columns(2)
     group = c1.selectbox("Count rows by", ["(none)"] + list(df.columns))
@@ -201,7 +210,7 @@ elif page == "Explore any data":
             summary[f"avg {num}"] = g[num].mean().round(2)
         summary = summary.sort_values("rows", ascending=False)
         st.bar_chart(summary["rows"].head(25), horizontal=True)
-        st.dataframe(summary, width="stretch")
+        st.dataframe(summary, use_container_width=True)
 
     if gj is not None:
         metric = st.selectbox("Color the map by", list(df.select_dtypes("number").columns))
@@ -227,10 +236,10 @@ elif page == "311 by neighborhood":
     st.title("311 requests next to the City's equity map")
     req_path = DATA / "311_requests.csv"
     t, _ = load(str(DATA / "tracts_311_and_equity.csv")) if (DATA / "tracts_311_and_equity.csv").exists() else (None, None)
-    _, gj = load(str(DATA / "equity_tracts.geojson"))
-    if t is None or not req_path.exists():
-        st.warning("311 data not downloaded yet. Run tools/fetch_data.py.")
+    if t is None or not req_path.exists() or not (DATA / "equity_tracts.geojson").exists():
+        st.warning("311 datasets are not installed. Supply 311_requests.csv, tracts_311_and_equity.csv and equity_tracts.geojson in data/.")
         st.stop()
+    _, gj = load(str(DATA / "equity_tracts.geojson"))
     t = t.set_index(t["GEOID"].astype(str)).reindex([str(f["properties"]["GEOID"]) for f in gj["features"]]).reset_index(drop=True)
     metrics = {"Late 311 requests (%)": "late_pct", "311 requests": "requests",
                "Median days to close": "median_days_to_close", "Equity score (City, 2-10)": "OVERALL_EQUITY_SCORE",
@@ -246,14 +255,14 @@ elif page == "311 by neighborhood":
     by_d["late_pct"] = (100 * by_d["late_pct"]).round(1)
     by_d["median_days"] = by_d["median_days"].round(1)
     st.subheader("By council district")
-    st.dataframe(by_d, width="stretch")
+    st.dataframe(by_d, use_container_width=True)
 
     d = st.selectbox("District for a brief", sorted(r["CouncilDistrict"].dropna().unique()))
     rd = r[r["CouncilDistrict"] == d]
     types = rd.groupby("TypeName").agg(requests=("late", "size"), late_pct=("late", "mean"))
     types["late_pct"] = (100 * types["late_pct"]).round(1)
     types = types.sort_values("requests", ascending=False).head(10)
-    st.dataframe(types, width="stretch")
+    st.dataframe(types, use_container_width=True)
     lang = st.radio("Language", ["English", "Spanish"], horizontal=True)
     if st.button("Write a one-page brief for this council office"):
         facts = (f"District {d}: {len(rd):,} requests in the last year, {100 * rd['late'].mean():.1f}% closed late "
