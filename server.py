@@ -68,10 +68,9 @@ def places():
             "event_name": r["event_name"], "date": r["acquisition_date"], "source": r["source_agency"],
             "before_date": before_date, "before_source": before_src,
             "facts": [
-                ["Rain in the 7 days before", num(r.get("preceding_7d_precipitation_mm"), "{:,.0f} mm")],
-                ["Ground elevation", num(r.get("elevation_m"), "{:,.0f} m")],
-                ["Roads and paths in view", num(r.get("osm_road_or_path_count"), "{:,.0f}")],
-                ["Nearest high-water mark", (num(hwm * 1000, "{:,.0f} m away") if not pd.isna(hwm) and hwm < 1 else num(hwm, "{:,.1f} km away"))],
+                ["Rain in the week before the photo", num(r.get("preceding_7d_precipitation_mm"), "{:,.0f} mm")],
+                ["Height above sea level", num(r.get("elevation_m"), "{:,.0f} m")],
+                ["Closest recorded flood line", (num(hwm * 1000, "{:,.0f} m away") if not pd.isna(hwm) and hwm < 1 else num(hwm, "{:,.1f} km away"))],
                 ["County poverty rate", num(r.get("county_poverty_percent"), "{:.0f}%")],
                 ["County median household income", num(r.get("county_median_household_income_usd"), "${:,.0f}")],
             ],
@@ -198,6 +197,111 @@ async def api_ask(request: Request):
     return JSONResponse({"answer": answer})
 
 
+import re
+
+SUFFIX = r"\b(street|st|drive|dr|road|rd|lane|ln|avenue|ave|boulevard|blvd|court|ct|circle|cir|way|trail|trl|parkway|pkwy)\b\.?"
+
+
+@lru_cache(maxsize=256)
+def nominatim(q, limit=5):
+    url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
+        {"q": q, "format": "json", "limit": limit, "countrycodes": "us", "addressdetails": 0})
+    req = urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.2 (UTSA datathon demo)"})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return [(float(h["lat"]), float(h["lon"]), h["display_name"]) for h in json.loads(r.read())]
+
+
+def suggest(q):
+    import time
+    q = re.sub(r"\s+", " ", q.strip())
+    num = re.match(r"^(\d+)\s", q)
+    words = [w for w in re.sub(SUFFIX, "", re.sub(r"^\d+\s+", "", q), flags=re.I).replace(",", " ").split() if len(w) > 2 and w.lower() not in ("tx", "texas")]
+    street = words[0].lower() if words else ""
+    tx = q if re.search(r"\b(tx|texas)\b", q, re.I) else q + ", Texas"
+    no_suffix = re.sub(r"\s+", " ", re.sub(SUFFIX, "", tx, flags=re.I)).strip(" ,")
+    tries = list(dict.fromkeys([tx, no_suffix, re.sub(r"^\d+\s+", "", no_suffix)]))
+    found = {}
+    for i, t in enumerate(tries):
+        if i:
+            time.sleep(1)  # Nominatim allows one request a second
+        for lat, lon, label in nominatim(t):
+            if "Texas" not in label or (street and street not in label.lower()):
+                continue
+            parts = [x.strip() for x in label.split(",") if x.strip() not in ("United States",)]
+            short = ", ".join(parts[:4])
+            rank = (2 if num and label.startswith(num.group(1)) else 0) + (1 if street else 0)
+            found.setdefault(short, {"label": short.replace(f"{num.group(1)}, ", f"{num.group(1)} ") if num else short, "lat": lat, "lon": lon, "rank": rank})
+        if any(v["rank"] >= 2 for v in found.values()):
+            break
+    out = sorted(found.values(), key=lambda v: -v["rank"])[:5]
+    for o in out:
+        o.pop("rank")
+    return out
+
+
+async def api_geo(request):
+    q = request.query_params.get("q", "").strip()[:120]
+    if len(q) < 3:
+        return JSONResponse({"error": "Type at least a street, town or ZIP code."}, status_code=400)
+    try:
+        hits = await run_in_threadpool(suggest, q)
+    except Exception as e:
+        return JSONResponse({"error": "Address search isn't reachable right now. Use your current location instead."}, status_code=502)
+    if not hits:
+        return JSONResponse({"error": f"No match for \"{q}\" in Texas. Try the street and town, or a ZIP code."}, status_code=404)
+    for h in hits:
+        n = nearest(h["lat"], h["lon"])[0]
+        h["nearest"] = {"id": n["id"], "place": n["place"], "km": round(km(h["lat"], h["lon"], n["lat"], n["lon"]), 1)}
+    return JSONResponse(hits)
+
+
+@lru_cache(maxsize=512)
+def photon(q):
+    url = "https://photon.komoot.io/api/?" + urllib.parse.urlencode({"q": q, "limit": 6, "lang": "en", "bbox": "-106.65,25.84,-93.51,36.5"})
+    req = urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.2 (UTSA datathon demo)"})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        feats = json.loads(r.read())["features"]
+    out = []
+    for f in feats:
+        p = f["properties"]
+        if p.get("state") != "Texas":
+            continue
+        line1 = " ".join(x for x in [p.get("housenumber", ""), p.get("street") or p.get("name", "")] if x).strip()
+        line2 = ", ".join(x for x in [p.get("city") or p.get("county"), "TX", p.get("postcode")] if x)
+        lon, lat = f["geometry"]["coordinates"]
+        out.append({"label": f"{line1}, {line2}" if line1 else line2, "lat": lat, "lon": lon})
+    return list({o["label"]: o for o in out}.values())[:5]
+
+
+async def api_suggest(request):
+    q = request.query_params.get("q", "").strip()[:120]
+    if len(q) < 3:
+        return JSONResponse([])
+    try:
+        return JSONResponse(await run_in_threadpool(photon, q))
+    except Exception:
+        return JSONResponse([])
+
+
+@lru_cache(maxsize=512)
+def reverse(lat, lon):
+    url = "https://nominatim.openstreetmap.org/reverse?" + urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "json", "zoom": 17, "addressdetails": 1})
+    req = urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.2 (UTSA datathon demo)"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        a = json.loads(r.read()).get("address", {})
+    line1 = " ".join(x for x in [a.get("house_number", ""), a.get("road", "")] if x).strip()
+    line2 = ", ".join(x for x in [a.get("city") or a.get("town") or a.get("village") or a.get("county"), "TX", a.get("postcode")] if x)
+    return f"Near {line1}, {line2}" if line1 else f"Near {line2}"
+
+
+async def api_reverse(request):
+    try:
+        lat, lon = round(float(request.query_params["lat"]), 5), round(float(request.query_params["lon"]), 5)
+        return JSONResponse({"label": await run_in_threadpool(reverse, lat, lon)})
+    except Exception:
+        return JSONResponse({"label": "Pin on the map"})
+
+
 async def api_find(request):
     q = request.query_params.get("q", "").strip()[:120]
     if not q:
@@ -277,8 +381,149 @@ async def api_dispatch(request):
     return JSONResponse({"answer": answer})
 
 
+REQUESTS = Path(os.environ.get("REQUESTS", HERE / "requests.jsonl"))
+POINTS = {"danger": (40, 20), "trapped": (30, 15), "injured": (25, 12), "rising": (15, 8), "vulnerable": (10, 5)}
+LABELS = {"danger": "In immediate danger", "trapped": "Trapped", "injured": "Someone injured", "rising": "Water rising",
+          "evacuate": "Can't evacuate safely", "vulnerable": "Disabled or elderly person"}
+
+
+def history_near(lat, lon):
+    p = nearest(lat, lon)[0]
+    d = km(lat, lon, p["lat"], p["lon"])
+    rain = next((v for k, v in p["facts"] if k.startswith("Rain") and v), None)
+    return {"id": p["id"], "place": p["place"], "event": p["event_name"], "km": round(d, 1), "rain": rain}
+
+
+def score(a, people, hist):
+    pts, why = 0, []
+    for k, (yes, unsure) in POINTS.items():
+        if a.get(k) == "yes":
+            pts += yes; why.append(LABELS[k])
+        elif a.get(k) == "unsure":
+            pts += unsure; why.append(LABELS[k] + " (not sure)")
+    if a.get("evacuate") == "no":
+        pts += 15; why.append(LABELS["evacuate"])
+    elif a.get("evacuate") == "unsure":
+        pts += 8; why.append("Not sure they can evacuate")
+    pts += min(max(people - 1, 0), 4) * 2
+    flood_pts = 6 if hist["km"] <= 3 else 3 if hist["km"] <= 10 else 0
+    pts += flood_pts
+    if a.get("danger") == "yes" or (a.get("trapped") == "yes" and a.get("rising") == "yes") or pts >= 60:
+        level = "Critical"
+    else:
+        level = "High" if pts >= 35 else "Medium" if pts >= 15 else "Low"
+    return pts, level, why, flood_pts
+
+
+def read_requests():
+    if not REQUESTS.exists():
+        return []
+    rows = [json.loads(l) for l in REQUESTS.read_text().splitlines() if l.strip()]
+    order = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+    return sorted(rows, key=lambda r: (r["status"] == "Resolved", order[r["level"]], -r["score"], r["time"]))
+
+
+def write_requests(rows):
+    REQUESTS.write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+
+def new_request(lat, lon, label, a, people, name, phone, sample=False):
+    hist = history_near(lat, lon)
+    pts, level, why, flood_pts = score(a, people, hist)
+    rows = read_requests()
+    r = {"id": f"R{len(rows) + 1:03d}", "time": datetime.now().strftime("%H:%M"), "lat": lat, "lon": lon, "label": label,
+         "answers": a, "people": people, "name": name, "phone": phone, "score": pts, "level": level, "why": why,
+         "flood_pts": flood_pts, "history": hist, "status": "Open", "sample": sample,
+         "reason": (", ".join([why[0]] + [w[0].lower() + w[1:] for w in why[1:]]) if why else "No urgent answers") + f". {people} {'person' if people == 1 else 'people'}."}
+    return r, rows
+
+
+async def api_request(request: Request):
+    b = await request.json()
+    try:
+        lat, lon = float(b["lat"]), float(b["lon"])
+    except (KeyError, TypeError, ValueError):
+        return JSONResponse({"error": "We need your location first."}, status_code=400)
+    a = {k: b.get("answers", {}).get(k) for k in list(POINTS) + ["evacuate"]}
+    people = max(1, min(int(b.get("people") or 1), 50))
+    r, rows = new_request(lat, lon, str(b.get("label", ""))[:160], a, people, str(b.get("name", ""))[:60], str(b.get("phone", ""))[:30])
+    lang = "Spanish" if b.get("lang") == "Spanish" else "English"
+    facts = f"Their answers: {', '.join(r['why']) or 'nothing urgent'}. People with them: {people}."
+    fallback = {"English": "Stay out of moving water. Get to the highest safe place you can. Keep your phone charged, and call 911 if you are in danger.",
+                "Spanish": "No entre en agua en movimiento. Suba al lugar seguro más alto que pueda. Mantenga su teléfono cargado y llame al 911 si está en peligro."}[lang]
+    try:
+        guidance = await run_in_threadpool(ask_ai, [
+            {"role": "system", "content": f"You write instructions for a person waiting for flood rescue. Write ONLY in {lang}. "
+             "Exactly 3 short sentences in plain words, based on their answers: what to do right now while help is on the way. "
+             "Always include: stay out of moving water, and call 911 if in danger. No headings, no lists, nothing else."},
+            {"role": "user", "content": facts}], 160)
+    except Exception:
+        guidance = fallback
+    rows.append(r)
+    write_requests(rows)
+    pos = [x["id"] for x in read_requests() if x["status"] != "Resolved"].index(r["id"]) + 1
+    return JSONResponse({"id": r["id"], "level": r["level"], "position": pos, "guidance": guidance})
+
+
+async def api_requests(request):
+    return JSONResponse(read_requests())
+
+
+async def api_status(request: Request):
+    b = await request.json()
+    rows = read_requests()
+    for r in rows:
+        if r["id"] == request.path_params["rid"] and b.get("status") in ("Open", "On the way", "Resolved"):
+            r["status"] = b["status"]
+    write_requests(rows)
+    return JSONResponse({"ok": True})
+
+
+SAMPLE_ANSWERS = [
+    ({"danger": "yes", "trapped": "yes", "injured": "no", "rising": "yes", "evacuate": "no", "vulnerable": "yes"}, 3, "Trapped on second floor with grandmother, water rising."),
+    ({"danger": "no", "trapped": "no", "injured": "yes", "rising": "yes", "evacuate": "unsure", "vulnerable": "no"}, 2, ""),
+    ({"danger": "unsure", "trapped": "no", "injured": "no", "rising": "yes", "evacuate": "no", "vulnerable": "yes"}, 4, ""),
+    ({"danger": "no", "trapped": "no", "injured": "no", "rising": "no", "evacuate": "yes", "vulnerable": "no"}, 1, ""),
+    ({"danger": "no", "trapped": "yes", "injured": "no", "rising": "unsure", "evacuate": "no", "vulnerable": "no"}, 2, ""),
+    ({"danger": "no", "trapped": "no", "injured": "no", "rising": "yes", "evacuate": "yes", "vulnerable": "yes"}, 5, ""),
+    ({"danger": "yes", "trapped": "no", "injured": "yes", "rising": "yes", "evacuate": "no", "vulnerable": "no"}, 2, ""),
+    ({"danger": "no", "trapped": "no", "injured": "no", "rising": "unsure", "evacuate": "unsure", "vulnerable": "no"}, 3, ""),
+]
+
+
+async def api_samples2(request):
+    rng = random.Random()
+    rows = read_requests()
+    for i, (a, people, _) in enumerate(SAMPLE_ANSWERS):
+        p = rng.choice(places())
+        lat, lon = p["lat"] + rng.uniform(-.01, .01), p["lon"] + rng.uniform(-.01, .01)
+        r, _ = new_request(lat, lon, f"Near {p['place']}", a, people, f"Sample {i + 1}", "", sample=True)
+        r["id"] = f"R{len(rows) + 1:03d}"
+        rows.append(r)
+    write_requests(rows)
+    return JSONResponse({"ok": True})
+
+
+async def api_briefing(request):
+    rows = [r for r in read_requests() if r["status"] != "Resolved"]
+    if not rows:
+        return JSONResponse({"answer": "No open requests."})
+    table = "\n".join(f"{r['id']} | {r['level']} | {r['label']} | {', '.join(r['why'])} | people {r['people']} | {r['status']}" for r in rows[:25])
+    try:
+        answer = await run_in_threadpool(ask_ai, [
+            {"role": "system", "content": "You brief flood rescue teams. Plain words, under 110 words, no headings. "
+             "Say which 3 requests to reach first and why, by request ID. Use only the list."},
+            {"role": "user", "content": table}], 300)
+    except Exception as e:
+        return JSONResponse({"error": "The AI didn't answer. Try again."}, status_code=502)
+    return JSONResponse({"answer": answer})
+
+
 app = Starlette(routes=[
-    Route("/", index), Route("/api/places", api_places), Route("/api/find", api_find),
+    Route("/", index), Route("/api/places", api_places), Route("/api/find", api_find), Route("/api/geo", api_geo), Route("/api/suggest", api_suggest), Route("/api/reverse", api_reverse),
+    Route("/api/request", api_request, methods=["POST"]), Route("/api/requests", api_requests),
+    Route("/api/requests/{rid}/status", api_status, methods=["POST"]), Route("/api/requests/samples", api_samples2, methods=["POST"]),
+    Route("/api/requests/briefing", api_briefing, methods=["POST"]),
     Mount("/static", StaticFiles(directory=HERE / "static")), Route("/img/{image_id}", img),
     Route("/api/ask", api_ask, methods=["POST"]), Route("/api/check", api_check, methods=["POST"]),
     Route("/api/households", api_households), Route("/api/households.csv", api_households_csv),

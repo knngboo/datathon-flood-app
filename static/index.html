@@ -3,169 +3,188 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light only">
+<meta name="darkreader-lock">
 <title>Texas Flood Check</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/leaflet/leaflet.css">
 <style>
-  :root { --ink:#13294B; --text:#1F2937; --muted:#5B6474; --line:#DDE2EA; --wash:#F5F7FA; --harvey:#13294B; --hill:#2F7F8F; --high:#B91C1C; --med:#B45309; --low:#15803D; }
+  :root { color-scheme: light; --ink:#13294B; --text:#1F2937; --muted:#4B5563; --line:#D1D7E0; --wash:#F3F5F8;
+          --critical:#B91C1C; --high:#C2410C; --medium:#A16207; --low:#15803D; --way:#1D4ED8; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; font-family: "Public Sans", system-ui, sans-serif; color: var(--text); background: #fff; }
-  header { height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--line); }
-  .brand { font-weight: 800; font-size: 1.2rem; color: var(--ink); letter-spacing: -0.01em; }
-  .brand span { font-weight: 500; color: var(--muted); margin-left: 10px; font-size: .95rem; }
-  nav button { font: inherit; background: none; border: 0; margin-left: 22px; color: var(--muted); font-weight: 500; padding: 19px 2px 16px; cursor: pointer; border-bottom: 3px solid transparent; }
-  nav button.on { color: var(--ink); border-bottom-color: var(--ink); }
-  .view { display: none; height: calc(100% - 60px); }
-  .view.on { display: block; }
-  #view-map.on { display: grid; grid-template-columns: 58fr 42fr; }
-  .mapwrap { position: relative; }
-  #map, #hhmap { height: 100%; }
-  .legend { position: absolute; left: 16px; bottom: 18px; z-index: 500; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: .85rem; }
-  .legend div { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
-  .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
-  aside { overflow-y: auto; padding: 26px 30px 40px; border-left: 1px solid var(--line); }
-  h1 { font-size: 1.75rem; line-height: 1.15; margin: 0 0 6px; color: var(--ink); font-weight: 800; letter-spacing: -0.015em; }
-  .sub { color: var(--muted); margin: 0 0 18px; }
-  .compare { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1 / 1; max-height: 380px; width: 100%; background: var(--wash); }
+  html, body { margin: 0; min-height: 100%; font-family: "Public Sans", system-ui, sans-serif; color: var(--text); background: #fff; }
+  header { height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--line); background: #fff; position: sticky; top: 0; z-index: 1000; }
+  .brand { font-weight: 800; font-size: 1.15rem; color: var(--ink); text-decoration: none; }
+  nav a { margin-left: 22px; color: var(--muted); text-decoration: none; font-weight: 600; padding: 18px 2px 15px; border-bottom: 3px solid transparent; }
+  nav a.on { color: var(--ink); border-bottom-color: var(--ink); }
+  .view { display: none; } .view.on { display: block; }
+  .btn { font: inherit; font-weight: 700; background: var(--ink); color: #fff; border: 2px solid var(--ink); border-radius: 10px; padding: 12px 18px; cursor: pointer; }
+  .btn.ghost { background: #fff; color: var(--ink); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .muted { color: var(--muted); }
+  :focus-visible { outline: 3px solid #2563EB; outline-offset: 2px; }
+
+  /* get help */
+  .alert911 { background: var(--critical); color: #fff; padding: 12px 20px; display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; font-weight: 600; }
+  .alert911 a { color: var(--critical); background: #fff; padding: 6px 14px; border-radius: 8px; font-weight: 800; text-decoration: none; }
+  .wizard { max-width: 560px; margin: 0 auto; padding: 26px 20px 60px; }
+  .progress { height: 6px; background: var(--wash); border-radius: 6px; overflow: hidden; margin-bottom: 10px; }
+  .progress div { height: 100%; background: var(--ink); width: 0; transition: width .25s; }
+  .stepcount { font-size: .9rem; color: var(--muted); margin-bottom: 20px; display: flex; justify-content: space-between; }
+  .stepcount button { font: inherit; background: none; border: 0; color: var(--ink); font-weight: 700; cursor: pointer; padding: 0; text-decoration: underline; }
+  .q { font-size: 1.55rem; line-height: 1.25; font-weight: 800; color: var(--ink); margin: 0 0 8px; }
+  .hint { color: var(--muted); margin: 0 0 20px; line-height: 1.5; }
+  .choices { display: grid; gap: 12px; }
+  .choice { font: inherit; font-size: 1.15rem; font-weight: 700; text-align: left; padding: 18px 20px; border-radius: 12px; border: 2px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+  .choice:hover { border-color: var(--ink); }
+  .choice.picked { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .search { position: relative; }
+  .search input { flex: 1; min-width: 0; width: 100%; font: inherit; font-size: 1.1rem; padding: 15px 16px; border: 2px solid var(--line); border-radius: 12px; }
+  .search input:focus { border-color: var(--ink); outline: none; }
+  .sugg { list-style: none; margin: 6px 0 0; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: 0 8px 24px rgba(19,41,75,.12); }
+  .sugg li { padding: 12px 12px; border-radius: 8px; cursor: pointer; line-height: 1.35; }
+  .sugg li.active, .sugg li:hover { background: var(--wash); }
+  .sugg .head { font-size: .8rem; color: var(--muted); cursor: default; padding: 6px 12px; }
+  .sugg .head:hover { background: none; }
+  .small { font-size: .9rem; margin: 8px 2px 18px; }
+  .chosen { border: 2px solid var(--ink); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+  .chosen .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; }
+  .chosen .top b { color: var(--ink); }
+  .chosen .top button { font: inherit; background: none; border: 0; color: var(--ink); font-weight: 700; text-decoration: underline; cursor: pointer; }
+  #pinmap { height: 220px; border-top: 1px solid var(--line); }
+  .alts { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+  .alts .btn { padding: 10px 14px; font-size: .95rem; }
+  #pickmap { height: 320px; border-radius: 12px; border: 1px solid var(--line); margin-bottom: 16px; }
+  .field { display: block; margin-bottom: 16px; font-weight: 600; color: var(--ink); }
+  .field input, .field select { display: block; width: 100%; margin-top: 6px; font: inherit; font-weight: 400; padding: 12px 14px; border: 2px solid var(--line); border-radius: 10px; background: #fff; }
+  .stepper { display: flex; align-items: center; gap: 16px; margin: 6px 0 22px; }
+  .stepper button { width: 52px; height: 52px; font-size: 1.6rem; border-radius: 12px; border: 2px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+  .stepper span { font-size: 1.8rem; font-weight: 800; color: var(--ink); min-width: 2ch; text-align: center; }
+  .send { width: 100%; padding: 18px; font-size: 1.15rem; background: var(--critical); border-color: var(--critical); }
+  .result { border-left: 8px solid var(--ink); background: var(--wash); border-radius: 12px; padding: 22px; }
+  .result h2 { margin: 0 0 4px; font-size: 1.5rem; color: var(--ink); }
+  .result .pos { font-size: 1.05rem; margin: 0 0 6px; }
+  .result h3 { margin: 18px 0 6px; font-size: 1rem; color: var(--ink); }
+  .result p { line-height: 1.55; margin: 0; }
+
+  /* responders */
+  .ops { display: grid; grid-template-columns: 420px 1fr; height: calc(100vh - 58px); }
+  .queue { border-right: 1px solid var(--line); overflow-y: auto; background: var(--wash); }
+  .queuehead { position: sticky; top: 0; background: #fff; border-bottom: 1px solid var(--line); padding: 14px 16px; z-index: 2; }
+  .counts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  .count { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .count b { display: block; font-size: 1.35rem; }
+  .count span { font-size: .78rem; color: var(--muted); }
+  .qbtns { display: flex; gap: 8px; }
+  .qbtns .btn { padding: 9px 12px; font-size: .9rem; }
+  .card { background: #fff; margin: 10px 12px; border-radius: 12px; border: 1px solid var(--line); border-left: 6px solid var(--line); padding: 12px 14px; cursor: pointer; }
+  .card.sel { box-shadow: 0 0 0 2px var(--ink); }
+  .card.done { opacity: .55; }
+  .cardtop { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .lvl { font-weight: 800; font-size: .95rem; }
+  .meta { font-size: .82rem; color: var(--muted); }
+  .where { font-weight: 600; color: var(--ink); margin: 4px 0 6px; font-size: .95rem; }
+  .flags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .flag { font-size: .78rem; padding: 2px 8px; border-radius: 999px; background: var(--wash); border: 1px solid var(--line); }
+  .status { font-size: .78rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; color: #fff; }
+  .side { display: grid; grid-template-rows: 46% 54%; min-height: 0; }
+  #opsmap { height: 100%; }
+  .detail { overflow-y: auto; padding: 18px 22px 30px; border-top: 1px solid var(--line); }
+  .detail h2 { margin: 0 0 2px; color: var(--ink); font-size: 1.35rem; }
+  .dgrid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; margin-top: 14px; }
+  .answers { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; font-size: .95rem; }
+  .answers .yes { color: var(--critical); font-weight: 800; }
+  .answers .unsure { color: var(--medium); font-weight: 800; }
+  .why { background: var(--wash); border-radius: 10px; padding: 10px 12px; margin: 12px 0; line-height: 1.5; font-size: .95rem; }
+  .compare { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1 / 1; max-height: 260px; background: var(--wash); }
   .compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .compare .bar { position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; background: #fff; box-shadow: 0 0 0 1px rgba(19,41,75,.35); pointer-events: none; }
   .compare input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; }
-  .caps { display: flex; justify-content: space-between; gap: 10px; font-size: .85rem; color: var(--muted); margin: 8px 2px 18px; }
-  .find { display: flex; gap: 8px; margin: 0 0 8px; }
-  .find input { flex: 1; font-size: 1.05rem; padding: 12px 14px; }
-  .found { font-size: .92rem; color: var(--muted); margin: 0 0 20px; min-height: 1.2em; }
-  .found b { color: var(--ink); }
-  .verdict { display: none; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--line); background: var(--wash); }
-  .tag { color: #fff; font-weight: 700; font-size: .8rem; padding: 3px 9px; border-radius: 4px; white-space: nowrap; }
-  dl { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; margin: 0 0 24px; }
-  dt { font-size: .82rem; color: var(--muted); }
-  dd { margin: 2px 0 0; font-size: 1.15rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
-  h2 { font-size: 1.05rem; color: var(--ink); margin: 0 0 10px; }
-  .chips button { font: inherit; font-size: .9rem; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 999px; padding: 7px 13px; margin: 0 6px 8px 0; cursor: pointer; }
-  .chips button:hover { border-color: var(--ink); }
-  .msg { border-radius: 8px; padding: 12px 15px; line-height: 1.55; margin: 8px 0; white-space: pre-wrap; }
-  .msg.q { background: #fff; border: 1px solid var(--line); font-weight: 600; color: var(--ink); }
-  .msg.a { background: var(--wash); }
-  .note { font-size: .8rem; color: var(--muted); margin: 4px 0 14px; }
-  .ask { display: flex; gap: 8px; }
-  input[type=text], select { font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
-  .ask input { flex: 1; }
-  .btn { font: inherit; font-weight: 600; background: var(--ink); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
-  .btn.line { background: #fff; color: var(--ink); border: 2px solid var(--ink); }
-  .btn:disabled { opacity: .5; cursor: wait; }
-  .cta { display: block; width: 100%; margin-top: 26px; }
-  .page { max-width: 760px; margin: 0 auto; padding: 34px 28px 60px; overflow-y: auto; height: 100%; }
-  .wide { max-width: 1180px; }
-  fieldset { border: 0; padding: 0; margin: 0 0 22px; }
-  legend { font-weight: 700; color: var(--ink); margin-bottom: 8px; font-size: 1.05rem; }
-  .opts label { display: inline-flex; align-items: center; gap: 6px; margin: 0 18px 6px 0; font-size: 1rem; }
-  .row { display: flex; gap: 14px; flex-wrap: wrap; }
-  .row > * { flex: 1; min-width: 180px; }
-  .result { margin-top: 24px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 10px; }
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 18px 0; }
-  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
-  .stat b { display: block; font-size: 1.8rem; color: var(--ink); }
-  .stat span { color: var(--muted); font-size: .88rem; }
-  table { width: 100%; border-collapse: collapse; font-size: .92rem; margin-top: 14px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 600; }
-  .hh { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-  #hhmap { height: 360px; border-radius: 10px; border: 1px solid var(--line); }
-  .sources li { margin: 6px 0; line-height: 1.5; }
-  a { color: var(--ink); }
-  :focus-visible { outline: 3px solid var(--hill); outline-offset: 2px; }
-  @media (max-width: 900px) { #view-map.on { grid-template-columns: 1fr; } #map { height: 50vh; } .stats, .hh { grid-template-columns: 1fr 1fr; } }
+  .caps { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin: 6px 0 10px; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .empty { padding: 30px 18px; color: var(--muted); text-align: center; }
+
+  /* about */
+  .doc { max-width: 980px; margin: 0 auto; padding: 34px 24px 70px; }
+  .doc h1 { color: var(--ink); font-size: 2rem; margin: 0 0 8px; }
+  .doc h2 { color: var(--ink); margin: 38px 0 12px; font-size: 1.25rem; }
+  .doc p { line-height: 1.6; max-width: 70ch; }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+  .limits { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .limits div { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; line-height: 1.5; }
+
+  @media (max-width: 900px) {
+    header { padding: 0 14px; } .brand { font-size: 1rem; white-space: nowrap; } nav { white-space: nowrap; } nav a { margin-left: 12px; font-size: .9rem; }
+    .ops { grid-template-columns: 1fr; height: auto; } .side { grid-template-rows: 320px auto; } .queue { max-height: 60vh; }
+    .dgrid, .limits { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <div class="brand">Texas Flood Check<span>What the flood did, street by street</span></div>
-  <nav>
-    <button data-v="map" class="on">Map</button><button data-v="check">Household check</button><button data-v="resp">Responders</button><button data-v="src">Sources</button>
-  </nav>
+  <a class="brand" href="#help">Texas Flood Check</a>
+  <nav><a href="#help" data-v="help">Get help</a><a href="#responders" data-v="responders">Responders</a><a href="#about" data-v="about">About</a></nav>
 </header>
 
-<section class="view on" id="view-map">
-  <div class="mapwrap">
-    <div id="map"></div>
-    <div class="legend">
-      <div><span class="dot" style="background:var(--harvey)"></span>Hurricane Harvey, Houston, 2017</div>
-      <div><span class="dot" style="background:var(--hill)"></span>Hill Country flood, July 2025</div>
-      <div><span class="dot" style="background:#fff;border:3px solid var(--high)"></span>Selected place</div>
-    </div>
+<section class="view" id="view-help">
+  <div class="alert911"><span>In danger right now? Call 911 first.</span><a href="tel:911">Call 911</a></div>
+  <div class="wizard">
+    <div class="progress"><div id="prog"></div></div>
+    <div class="stepcount"><span id="stepno"></span><button id="back" type="button">Back</button></div>
+    <div id="step"></div>
   </div>
-  <aside>
-    <form class="find" id="findform"><input type="text" id="findq" placeholder="Type your address, town or ZIP code" aria-label="Your address, town or ZIP code"><button class="btn">Find</button></form>
-    <p class="found" id="found">Or click any dot on the map.</p>
-    <div id="panel"><p class="sub">Loading places…</p></div>
-  </aside>
 </section>
 
-<section class="view" id="view-check">
-  <div class="page">
-    <h1>Is your household ready for the next flood?</h1>
-    <p class="sub">Five questions. You get a plan for your home, and responders see who needs help first. Name and phone are optional.</p>
-    <form id="checkform">
-      <fieldset><legend>Where do you live?</legend>
-        <div class="find"><input type="text" id="homeq" placeholder="Address, town or ZIP code"><button class="btn line" type="button" id="homebtn">Find</button></div>
-        <p class="found" id="homefound">We'll match you to the closest flood photo.</p>
-        <select id="area" hidden></select></fieldset>
-      <fieldset class="opts"><legend>Do you have a car you can use to leave?</legend>
-        <label><input type="radio" name="car" value="Yes" checked>Yes</label><label><input type="radio" name="car" value="No">No</label></fieldset>
-      <fieldset class="opts"><legend>Does anyone at home need help moving, like an older adult, a person with a disability, or a baby?</legend>
-        <label><input type="radio" name="mobility_help" value="No" checked>No</label><label><input type="radio" name="mobility_help" value="Yes">Yes</label></fieldset>
-      <fieldset class="opts"><legend>Can you get emergency alerts on a phone?</legend>
-        <label><input type="radio" name="alerts" value="Yes" checked>Yes</label><label><input type="radio" name="alerts" value="No">No</label><label><input type="radio" name="alerts" value="Not sure">Not sure</label></fieldset>
-      <fieldset class="opts"><legend>Is your home near a creek or river, or on low ground?</legend>
-        <label><input type="radio" name="near_water" value="No" checked>No</label><label><input type="radio" name="near_water" value="Yes">Yes</label><label><input type="radio" name="near_water" value="Not sure">Not sure</label></fieldset>
-      <div class="row">
-        <input type="text" id="name" placeholder="First name (optional)">
-        <input type="text" id="phone" placeholder="Phone (optional)">
-        <select id="lang"><option>English</option><option>Spanish</option></select>
+<section class="view" id="view-responders">
+  <div class="ops">
+    <div class="queue">
+      <div class="queuehead">
+        <div class="counts" id="counts"></div>
+        <div class="qbtns"><button class="btn" id="briefbtn">Who to reach first</button><button class="btn ghost" id="samplebtn">Load demo requests</button></div>
+        <div class="why" id="brief" hidden></div>
       </div>
-      <p><button class="btn" id="checkbtn" type="submit">Get my plan</button></p>
-    </form>
-    <div class="result" id="checkresult" hidden></div>
-  </div>
-</section>
-
-<section class="view" id="view-resp">
-  <div class="page wide">
-    <h1>Who needs help first</h1>
-    <p class="sub">Every household that took the check, highest priority first. High means no car or someone who needs help moving, and a home near water or low ground.</p>
-    <div class="stats" id="stats"></div>
-    <div class="hh"><div id="hhmap"></div>
-      <div>
-        <h2>Where to go first</h2>
-        <p><button class="btn" id="dispatch">Ask the AI where to send help first</button></p>
-        <div class="msg a" id="dispatchout" hidden></div>
-        <p style="margin-top:22px"><button class="btn line" id="samples">Add 12 sample households</button> <a href="/api/households.csv">Download the list</a></p>
-        <p class="note">Sample households are made up for the demo and are marked "yes" in the sample column.</p>
-      </div>
+      <div id="cards"></div>
     </div>
-    <table id="hhtable"></table>
+    <div class="side"><div id="opsmap"></div><div class="detail" id="detail"><p class="muted">Select a request to see why it's ranked there.</p></div></div>
   </div>
 </section>
 
-<section class="view" id="view-src">
-  <div class="page">
-    <h1>Where this comes from</h1>
-    <ul class="sources">
-      <li><b>After-flood photos:</b> NOAA emergency response aerial imagery, Harvey (Aug 2017) and the Hill Country flood (July 2025). <a href="https://storms.ngs.noaa.gov/" target="_blank">storms.ngs.noaa.gov</a></li>
-      <li><b>Before photos:</b> USDA National Agriculture Imagery Program, 2016.</li>
-      <li><b>Prepared for this event</b> by the organizers: <a href="https://huggingface.co/datasets/jennifer-fowler/UTSA-flood-images" target="_blank">jennifer-fowler/UTSA-flood-images</a> on Hugging Face (1,204 photos and their details).</li>
-      <li><b>Numbers next to each photo</b> come from the same dataset: rainfall from the nearest weather station, ground elevation from USGS terrain data, roads and paths from OpenStreetMap, high-water marks from USGS, and county income and poverty from the U.S. Census American Community Survey.</li>
-      <li><b>The AI:</b> Qwen3-VL-8B, a model that reads photos and text, running on the Dell Pro Max GB10 at our table. No photo or answer leaves the building.</li>
-    </ul>
-    <h2 style="margin-top:28px">What the AI can't tell</h2>
-    <ul class="sources">
-      <li>A normal river, pond or pool can look like a flood from the air.</li>
-      <li>The before and after photos are a year apart, so seasons and cameras differ too.</li>
-      <li>Rain nearby is context, not proof of what's in a photo.</li>
-      <li>Its answers are things to check, not facts. Never drive through water on a road.</li>
-    </ul>
-    <p class="note" style="margin-top:24px">Code: github.com/knngboo/datathon-flood-app</p>
+<section class="view" id="view-about">
+  <div class="doc">
+    <h1>How Texas Flood Check works</h1>
+    <p>During a flash flood, people send their location and answer six questions. Every request is ranked so responders reach the people in the most danger first. Flood history for that spot counts, but it never outranks someone who says they are in danger now.</p>
+    <h2>How a request is ranked</h2>
+    <table>
+      <tr><th>What the person tells us</th><th>Yes</th><th>Not sure</th></tr>
+      <tr><td>In immediate danger</td><td>40</td><td>20</td></tr>
+      <tr><td>Trapped</td><td>30</td><td>15</td></tr>
+      <tr><td>Someone is injured</td><td>25</td><td>12</td></tr>
+      <tr><td>Water is rising</td><td>15</td><td>8</td></tr>
+      <tr><td>Can't leave safely on their own (answered No)</td><td>15</td><td>8</td></tr>
+      <tr><td>Someone elderly or disabled with them</td><td>10</td><td>5</td></tr>
+      <tr><td>Each extra person, up to 4</td><td colspan="2">2 each</td></tr>
+      <tr><td>Past flooding photographed within 3 km / 10 km</td><td colspan="2">6 / 3</td></tr>
+    </table>
+    <p class="muted" style="margin-top:10px">Critical: in immediate danger, or trapped with water rising, or 60 points and up. High: 35 and up. Medium: 15 and up. Low: below 15.</p>
+    <h2>Where the data comes from</h2>
+    <table>
+      <tr><th>Data</th><th>What it shows</th><th>Source</th></tr>
+      <tr><td>After-flood aerial photos</td><td>Hurricane Harvey (Aug 2017) and the Texas Hill Country flood (July 2025)</td><td><a href="https://storms.ngs.noaa.gov/" target="_blank">NOAA emergency response imagery</a></td></tr>
+      <tr><td>Before-flood aerial photos</td><td>The same places in 2016</td><td>USDA National Agriculture Imagery Program</td></tr>
+      <tr><td>Photo details</td><td>Rainfall, height above sea level, recorded flood lines</td><td>Weather stations, USGS and U.S. Census, via the organizers' <a href="https://huggingface.co/datasets/jennifer-fowler/UTSA-flood-images" target="_blank">dataset</a></td></tr>
+      <tr><td>Flood check on each photo</td><td>Whether water covers ground that was dry before</td><td>A photo-reading AI model running on the Dell Pro Max GB10 at our table</td></tr>
+      <tr><td>Addresses and street names</td><td>Turning what you type or tap into a location</td><td>OpenStreetMap (Photon and Nominatim)</td></tr>
+    </table>
+    <h2>What it can't do</h2>
+    <div class="limits">
+      <div>It is a student prototype, not a real emergency service. Anyone in danger should call 911.</div>
+      <div>The aerial photos show past floods, not what is happening right now.</div>
+      <div>The AI's flood check is a second opinion for responders to verify, not a decision.</div>
+      <div>A river, pond or pool can look like flooding from the air, and the before and after photos are a year apart.</div>
+    </div>
   </div>
 </section>
 
@@ -173,166 +192,221 @@
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let PLACES = [], current = null, chats = {}, map, hhmap, selRing, hhLayer;
-const COLORS = { harvey: '#13294B', hill: '#2F7F8F' }, PRI = { High: '#B91C1C', Medium: '#B45309', Low: '#15803D' };
-const fmtDate = d => d ? new Date(d + 'T12:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.v));
-function show(v) {
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'view-' + v));
-  if (v === 'map') setTimeout(() => map.invalidateSize(), 50);
-  if (v === 'resp') loadHouseholds();
-}
-
+const TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+const ATTR = 'Esri, OpenStreetMap contributors';
+const LVL = { Critical: '#B91C1C', High: '#C2410C', Medium: '#A16207', Low: '#15803D' };
+const ST = { 'Open': '#4B5563', 'On the way': '#1D4ED8', 'Resolved': '#15803D' };
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error || 'Something went wrong.');
-  return j;
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Something went wrong. Try again.'); return j;
 }
+const getJSON = async url => { const r = await fetch(url); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Something went wrong.'); return j; };
 
-// ---------- map ----------
-async function init() {
-  map = L.map('map').setView([29.95, -96.4], 7);
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri, HERE, Garmin, OpenStreetMap contributors', maxZoom: 16 }).addTo(map);
-  PLACES = await (await fetch('/api/places')).json();
-  PLACES.forEach(p => L.circleMarker([p.lat, p.lon], { radius: 5, weight: 1, color: '#fff', fillColor: COLORS[p.event], fillOpacity: .85 })
-    .bindTooltip(esc(p.place)).on('click', () => select(p.id)).addTo(map));
-  const area = $('#area');
-  [...PLACES].sort((a, b) => a.place.localeCompare(b.place)).forEach(p => area.add(new Option(`${p.place} (${p.county || p.event_name})`, p.id)));
-  select((PLACES.find(p => p.id === 'TX001_2017_NOAA') || PLACES[0]).id);
+function route() {
+  const v = ['help', 'responders', 'about'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'help';
+  document.querySelectorAll('nav a').forEach(a => a.classList.toggle('on', a.dataset.v === v));
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'view-' + v));
+  if (v === 'help') renderStep();
+  if (v === 'responders') openOps();
+  window.scrollTo(0, 0);
 }
+window.addEventListener('hashchange', route);
 
-let youMarker;
-async function findPlace(q) {
-  const r = await fetch('/api/find?q=' + encodeURIComponent(q)); const j = await r.json();
-  if (!r.ok) throw new Error(j.error);
-  return j;
+/* ================= GET HELP ================= */
+const QUESTIONS = [
+  ['danger', 'Are you in immediate danger?', 'For example, water inside your home or car, or no safe place to go.'],
+  ['rising', 'Is the water rising where you are?', ''],
+  ['trapped', 'Are you trapped?', 'You can\'t leave because water or debris is blocking the way.'],
+  ['injured', 'Is anyone with you injured?', ''],
+  ['evacuate', 'Can you leave safely on your own?', 'Only say yes if the way out has no moving water.'],
+  ['vulnerable', 'Is anyone with you elderly or disabled?', 'Or a baby, or anyone who needs help moving.'],
+];
+const S = { step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, done: null };
+const TOTAL = QUESTIONS.length + 2;
+let pinmap, pickmap, pin;
+
+function renderStep() {
+  $('#prog').style.width = (S.done ? 100 : (S.step / TOTAL) * 100) + '%';
+  $('#stepno').textContent = S.done ? 'Request sent' : `Step ${S.step + 1} of ${TOTAL}`;
+  $('#back').style.visibility = S.step > 0 && !S.done ? 'visible' : 'hidden';
+  const box = $('#step');
+  if (S.done) return renderDone(box);
+  if (S.step === 0) return renderWhere(box);
+  if (S.step <= QUESTIONS.length) {
+    const [key, q, hint] = QUESTIONS[S.step - 1];
+    box.innerHTML = `<h1 class="q">${q}</h1><p class="hint">${hint || 'Pick one.'}</p><div class="choices">` +
+      [['yes', 'Yes'], ['no', 'No'], ['unsure', 'Not sure']].map(([v, l]) => `<button class="choice ${S.answers[key] === v ? 'picked' : ''}" data-v="${v}">${l}</button>`).join('') + '</div>';
+    box.querySelectorAll('.choice').forEach(b => b.onclick = () => { S.answers[key] = b.dataset.v; S.step++; renderStep(); });
+    box.querySelector('.choice').focus();
+    return;
+  }
+  renderSend(box);
 }
-$('#findform').onsubmit = async e => {
-  e.preventDefault(); const q = $('#findq').value.trim(); if (!q) return;
-  $('#found').textContent = 'Searching…';
-  try {
-    const j = await findPlace(q), n = j.nearest[0];
-    if (youMarker) map.removeLayer(youMarker);
-    youMarker = L.marker([j.lat, j.lon]).bindTooltip('You searched here').addTo(map);
-    map.flyTo([j.lat, j.lon], n.km > 40 ? 8 : 12);
-    $('#found').innerHTML = n.km > 40
-      ? `We don't have flood photos near <b>${esc(q)}</b>. The closest is <b>${esc(n.place)}</b>, ${n.km} km away.`
-      : `Closest flood photo to <b>${esc(q)}</b>: <b>${esc(n.place)}</b>, ${n.km} km away.`;
-    select(n.id);
-  } catch (err) { $('#found').textContent = err.message; }
-};
-$('#homebtn').onclick = async () => {
-  const q = $('#homeq').value.trim(); if (!q) return;
-  $('#homefound').textContent = 'Searching…';
-  try {
-    const j = await findPlace(q), n = j.nearest[0];
-    $('#area').value = n.id;
-    $('#homefound').innerHTML = `Matched to <b>${esc(n.place)}</b>, ${n.km} km from ${esc(q)}.`;
-  } catch (err) { $('#homefound').textContent = err.message; }
-};
+$('#back').onclick = () => { if (S.step > 0) { S.step--; renderStep(); } };
 
-function select(id) {
-  current = PLACES.find(p => p.id === id);
-  const p = current;
-  if (selRing) map.removeLayer(selRing);
-  selRing = L.circleMarker([p.lat, p.lon], { radius: 10, weight: 4, color: '#B91C1C', fillColor: '#fff', fillOpacity: 1 }).addTo(map);
-  const facts = p.facts.filter(f => f[1]).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
-  const photo = p.before
-    ? `<div class="compare" id="cmp"><img src="/img/${p.id}?w=720" alt="After the flood"><img class="before" src="/img/${p.before}?w=720" alt="Before the flood" style="clip-path: inset(0 50% 0 0)"><div class="bar"></div><input type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div>
-       <div class="caps"><span>Before: ${esc(fmtDate(p.before_date))}, ${esc(p.before_source)}</span><span>Drag to compare</span><span>After: ${esc(fmtDate(p.date))}, ${esc(p.source)}</span></div>`
-    : `<div class="compare"><img src="/img/${p.id}?w=720" alt="After the flood"></div><div class="caps"><span>After: ${esc(fmtDate(p.date))}, ${esc(p.source)}</span><span>No before photo for this place</span></div>`;
-  $('#panel').innerHTML = `
-    <h1>${esc(p.place)}</h1>
-    <p class="sub">${esc(p.county ? p.county + '. ' : '')}${esc(p.event_name)}, photographed from the air on ${esc(fmtDate(p.date))}.</p>
-    ${photo}
-    <div class="verdict" id="verdict"></div>
-    <dl>${facts}</dl>
-    <h2>Ask about this place</h2>
-    <div class="chips">
-      <button data-q="Is floodwater covering normally dry land? Give one visible clue.">Is floodwater covering dry land?</button>
-      <button data-q="Which roads look under water in the after photo?">Which roads look under water?</button>
-      <button data-q="Which direction or road looks dry enough to leave the area safely? Say what you can't tell.">Which way out looks dry?</button>
+function renderWhere(box) {
+  box.innerHTML = `<h1 class="q">Where are you?</h1>
+    <p class="hint">Start typing your street address, then pick it from the list.</p>
+    <div id="chosen" class="chosen" hidden><div class="top"><span>Sending help to<br><b id="chosenlabel"></b></span><button type="button" id="change">Change</button></div><div id="pinmap"></div></div>
+    <div id="finder">
+      <div class="search"><div style="display:flex;gap:8px"><input id="addr" placeholder="Street address or ZIP code" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugg"><button class="btn" type="button" id="addrgo">Search</button></div><ul class="sugg" id="sugg" role="listbox" hidden></ul></div>
+      <p class="hint small" id="addrmsg">Don't see your address in the list? Type the full street and tap Search.</p>
+      <div class="alts"><button class="btn ghost" type="button" id="geo">Use my current location</button><button class="btn ghost" type="button" id="showpick">Pick on a map instead</button></div>
+      <div id="pickwrap" hidden><p class="hint">Tap where you are.</p><div id="pickmap"></div></div>
     </div>
-    <div id="chat"></div>
-    <form class="ask" id="askform"><input type="text" id="askq" placeholder="Ask anything about these photos"><button class="btn" id="askbtn">Ask</button></form>
-    <p class="note">Answers come from Qwen3-VL-8B running on the Dell Pro Max GB10 at our table. Check them against the photo.</p>
-    <button class="btn line cta" onclick="show('check')">Is your household ready? Take the 5-question check</button>`;
-  const cmp = $('#cmp');
-  if (cmp) { const r = cmp.querySelector('input'); r.oninput = () => { cmp.querySelector('.before').style.clipPath = `inset(0 ${100 - r.value}% 0 0)`; cmp.querySelector('.bar').style.left = r.value + '%'; }; }
-  document.querySelectorAll('.chips button').forEach(b => b.onclick = () => ask(b.dataset.q, b.textContent));
-  $('#askform').onsubmit = e => { e.preventDefault(); const q = $('#askq').value.trim(); if (q) { $('#askq').value = ''; ask(q, q); } };
-  renderChat();
+    <button class="btn" id="next" style="width:100%" ${S.lat ? '' : 'disabled'}>Next</button>`;
+  const input = $('#addr'), list = $('#sugg');
+  let items = [], active = -1, timer, seq = 0;
+  const showList = (rows, head) => {
+    items = rows; active = -1;
+    if (!rows.length) { list.hidden = true; input.setAttribute('aria-expanded', 'false'); return; }
+    list.innerHTML = (head ? `<li class="head">${esc(head)}</li>` : '') + rows.map((r, i) => `<li role="option" data-i="${i}">${esc(r.label)}</li>`).join('');
+    list.hidden = false; input.setAttribute('aria-expanded', 'true');
+    list.querySelectorAll('li[data-i]').forEach(li => li.onmousedown = e => { e.preventDefault(); pick(+li.dataset.i); });
+  };
+  const highlight = () => list.querySelectorAll('li[data-i]').forEach((li, i) => li.classList.toggle('active', i === active));
+  const pick = i => { const r = items[i]; if (r) { list.hidden = true; setLocation(r.lat, r.lon, r.label); } };
+  input.oninput = () => {
+    clearTimeout(timer); const q = input.value.trim(); const my = ++seq;
+    if (q.length < 3) return showList([]);
+    timer = setTimeout(async () => { try { const rows = await getJSON('/api/suggest?q=' + encodeURIComponent(q)); if (my === seq) showList(rows); } catch { } }, 300);
+  };
+  input.onkeydown = async e => {
+    if (e.key === 'ArrowDown' && items.length) { active = Math.min(items.length - 1, active + 1); highlight(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp' && items.length) { active = Math.max(0, active - 1); highlight(); e.preventDefault(); }
+    else if (e.key === 'Escape') showList([]);
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (active >= 0) return pick(active);
+      const q = input.value.trim(); if (q.length < 3) return;
+      $('#addrmsg').textContent = 'Searching every address…'; seq++;
+      try { showList(await getJSON('/api/geo?q=' + encodeURIComponent(q)), 'Search results. Pick yours.'); $('#addrmsg').textContent = 'Pick your address from the list.'; }
+      catch (err) { showList([]); $('#addrmsg').textContent = err.message; }
+    }
+  };
+  input.onblur = () => setTimeout(() => list.hidden = true, 150);
+  $('#addrgo').onclick = () => { active = -1; input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); };
+  $('#geo').onclick = () => {
+    if (!navigator.geolocation) return ($('#addrmsg').textContent = 'This device can\'t share its location. Type your address or pick on a map.');
+    $('#addrmsg').textContent = 'Finding you…';
+    navigator.geolocation.getCurrentPosition(async p => setLocation(p.coords.latitude, p.coords.longitude, await nameOf(p.coords.latitude, p.coords.longitude)),
+      () => $('#addrmsg').textContent = 'Couldn\'t get your location. Type your address or pick on a map.', { timeout: 8000 });
+  };
+  $('#showpick').onclick = () => {
+    $('#pickwrap').hidden = false;
+    if (!pickmap) { pickmap = L.map('pickmap').setView([29.8, -95.5], 9); L.tileLayer(TILES, { attribution: ATTR, maxZoom: 18 }).addTo(pickmap);
+      pickmap.on('click', async e => setLocation(e.latlng.lat, e.latlng.lng, await nameOf(e.latlng.lat, e.latlng.lng))); }
+    setTimeout(() => pickmap.invalidateSize(), 50);
+  };
+  $('#change').onclick = () => { S.lat = null; S.lon = null; S.label = ''; pinmap = null; pickmap = null; renderStep(); };
+  $('#next').onclick = () => { S.step = 1; renderStep(); };
+  if (S.lat) showChosen(); else input.focus();
+}
+async function nameOf(lat, lon) { try { return (await getJSON(`/api/reverse?lat=${lat}&lon=${lon}`)).label; } catch { return 'Pin on the map'; } }
+function setLocation(lat, lon, label) { S.lat = lat; S.lon = lon; S.label = label; showChosen(); }
+function showChosen() {
+  $('#finder').hidden = true; $('#chosen').hidden = false; $('#chosenlabel').textContent = S.label; $('#next').disabled = false;
+  if (!pinmap) { pinmap = L.map('pinmap', { zoomControl: false }); L.tileLayer(TILES, { attribution: ATTR, maxZoom: 18 }).addTo(pinmap); }
+  pinmap.setView([S.lat, S.lon], 16); setTimeout(() => pinmap.invalidateSize(), 50);
+  if (pin) pin.remove();
+  pin = L.marker([S.lat, S.lon], { draggable: true }).addTo(pinmap).bindTooltip('Drag me if this isn\'t exactly right');
+  pin.on('dragend', async () => { const ll = pin.getLatLng(); S.lat = ll.lat; S.lon = ll.lng; S.label = await nameOf(ll.lat, ll.lng); $('#chosenlabel').textContent = S.label; });
+  $('#next').focus();
 }
 
-function renderChat() {
-  const h = chats[current.id] || [];
-  $('#chat').innerHTML = h.map(m => `<div class="msg ${m.role === 'user' ? 'q' : 'a'}">${esc(m.shown || m.text)}</div>`).join('');
-  const first = h.find(m => m.role === 'assistant' && m.verdict);
-  const v = $('#verdict');
-  if (first) {
-    const w = first.text.trim().split(/\W/)[0].toLowerCase();
-    const [label, color, bg] = w === 'yes' ? ['Flooded', '#B91C1C', '#FEF5F5'] : w === 'no' ? ['No flood seen', '#15803D', '#F2FBF5'] : ['Unclear', '#B45309', '#FFF8EE'];
-    v.style.display = 'flex'; v.style.background = bg; v.style.borderColor = color + '55';
-    v.innerHTML = `<span class="tag" style="background:${color}">${label}</span><span>${esc(first.text.replace(/^\W*(yes|no|unclear)\W*/i, ''))}</span>`;
-  } else v.style.display = 'none';
+function renderSend(box) {
+  box.innerHTML = `<h1 class="q">How many people are with you?</h1><p class="hint">Count yourself too.</p>
+    <div class="stepper"><button type="button" id="minus" aria-label="Fewer people">−</button><span id="ppl">${S.people}</span><button type="button" id="plus" aria-label="More people">+</button></div>
+    <label class="field">Your first name (optional)<input id="nm" autocomplete="given-name"></label>
+    <label class="field">Phone number so responders can reach you (optional)<input id="ph" type="tel" autocomplete="tel"></label>
+    <label class="field">Language for your instructions<select id="lg"><option>English</option><option>Spanish</option></select></label>
+    <button class="btn send" id="sendbtn">Send for help</button><p class="hint" id="senderr" style="margin-top:12px"></p>`;
+  $('#minus').onclick = () => { S.people = Math.max(1, S.people - 1); $('#ppl').textContent = S.people; };
+  $('#plus').onclick = () => { S.people = Math.min(50, S.people + 1); $('#ppl').textContent = S.people; };
+  $('#sendbtn').onclick = async () => {
+    $('#sendbtn').disabled = true; $('#sendbtn').textContent = 'Sending… about 10 seconds';
+    try {
+      S.done = await post('/api/request', { lat: S.lat, lon: S.lon, label: S.label, answers: S.answers, people: S.people,
+        name: $('#nm').value.trim(), phone: $('#ph').value.trim(), lang: $('#lg').value });
+      renderStep();
+    } catch (e) { $('#senderr').textContent = e.message; $('#sendbtn').disabled = false; $('#sendbtn').textContent = 'Send for help'; }
+  };
 }
 
-async function ask(q, shown) {
-  const id = current.id, h = chats[id] = chats[id] || [];
-  const history = h.map(m => ({ role: m.role, text: m.text }));
-  h.push({ role: 'user', text: q, shown });
-  h.push({ role: 'assistant', text: 'Looking at the photos… about 10 seconds.' });
-  renderChat();
-  document.querySelectorAll('.chips button, #askbtn').forEach(b => b.disabled = true);
-  try {
-    const r = await post('/api/ask', { id, question: q, history });
-    h[h.length - 1] = { role: 'assistant', text: r.answer, verdict: q.startsWith('Is floodwater') };
-  } catch (e) { h[h.length - 1] = { role: 'assistant', text: e.message }; }
-  if (current.id === id) renderChat();
-  document.querySelectorAll('.chips button, #askbtn').forEach(b => b.disabled = false);
+function renderDone(box) {
+  const d = S.done, c = LVL[d.level];
+  box.innerHTML = `<div class="result" style="border-left-color:${c}">
+      <h2>Help request sent</h2>
+      <p class="pos">Priority <b style="color:${c}">${d.level}</b>. You are number <b>${d.position}</b> on the responders' list.</p>
+      <p class="muted">Location: ${esc(S.label)}</p>
+      <h3>What to do right now</h3><p>${esc(d.guidance)}</p>
+      <h3>What happens next</h3><p>Responders work from the top of the list down. If things get worse, send a new request with your new answers, or call 911.</p>
+    </div>
+    <p style="margin-top:18px"><button class="btn ghost" id="again">Send a new request</button></p>`;
+  $('#again').onclick = () => { Object.assign(S, { step: 1, answers: {}, people: 1, done: null }); renderStep(); };
 }
 
-// ---------- household check ----------
-$('#checkform').onsubmit = async e => {
-  e.preventDefault();
-  const f = new FormData(e.target), out = $('#checkresult'), btn = $('#checkbtn');
-  if (!$('#homefound').textContent.startsWith('Matched')) { out.hidden = false; out.innerHTML = '<p>Type where you live and press Find first.</p>'; return; }
-  const body = { place_id: $('#area').value, car: f.get('car'), mobility_help: f.get('mobility_help'), alerts: f.get('alerts'),
-                 near_water: f.get('near_water'), name: $('#name').value, phone: $('#phone').value, lang: $('#lang').value };
-  btn.disabled = true; out.hidden = false; out.innerHTML = '<p class="sub">Writing your plan… about 15 seconds.</p>';
-  try {
-    const r = await post('/api/check', body);
-    out.innerHTML = `<p><span class="tag" style="background:${PRI[r.priority]}">${r.priority} priority</span></p><h2>Your plan</h2><div class="msg a">${esc(r.plan)}</div><p class="note">Saved. Responders see High priority households first.</p>`;
-  } catch (err) { out.innerHTML = `<p>${esc(err.message)}</p>`; }
-  btn.disabled = false;
-};
-
-// ---------- responders ----------
-async function loadHouseholds() {
-  const rows = await (await fetch('/api/households')).json();
-  const n = k => rows.filter(k).length;
-  $('#stats').innerHTML = [[rows.length, 'Households'], [n(r => r.priority === 'High'), 'High priority'], [n(r => r.car === 'No'), 'No car'], [n(r => r.mobility_help === 'Yes'), 'Need help moving']]
-    .map(([v, l]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
-  if (!hhmap) { hhmap = L.map('hhmap').setView([29.95, -96.4], 7); L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri, HERE, Garmin, OpenStreetMap contributors', maxZoom: 16 }).addTo(hhmap); }
-  setTimeout(() => hhmap.invalidateSize(), 50);
-  if (hhLayer) hhmap.removeLayer(hhLayer);
-  hhLayer = L.layerGroup(rows.map(r => L.circleMarker([+r.lat, +r.lon], { radius: 7, weight: 1, color: '#fff', fillColor: PRI[r.priority], fillOpacity: .9 })
-    .bindTooltip(`${esc(r.name || 'Household')}: ${r.priority}<br>${esc(r.place)}`))).addTo(hhmap);
-  $('#hhtable').innerHTML = rows.length ? '<tr><th>Priority</th><th>Name</th><th>Area</th><th>Car</th><th>Needs help moving</th><th>Alerts</th><th>Near water</th><th>Sample</th><th>Time</th></tr>' +
-    rows.map(r => `<tr><td><span class="tag" style="background:${PRI[r.priority]}">${r.priority}</span></td><td>${esc(r.name)}</td><td>${esc(r.place)}</td><td>${esc(r.car)}</td><td>${esc(r.mobility_help)}</td><td>${esc(r.alerts)}</td><td>${esc(r.near_water)}</td><td>${esc(r.sample)}</td><td>${esc(r.time)}</td></tr>`).join('')
-    : '<tr><td>No households yet. Take the household check, or add sample households.</td></tr>';
+/* ================= RESPONDERS ================= */
+let opsmap, markers = {}, ROWS = [], selId = null, PLACES = null;
+async function openOps() {
+  if (!opsmap) { opsmap = L.map('opsmap').setView([29.9, -96.3], 7); L.tileLayer(TILES, { attribution: ATTR, maxZoom: 18 }).addTo(opsmap); }
+  setTimeout(() => opsmap.invalidateSize(), 60);
+  if (!PLACES) PLACES = await getJSON('/api/places');
+  await loadRows(true);
 }
-$('#samples').onclick = async () => { await post('/api/samples'); loadHouseholds(); };
-$('#dispatch').onclick = async () => {
-  const out = $('#dispatchout'), b = $('#dispatch'); out.hidden = false; out.textContent = 'Reading the list… about 10 seconds.'; b.disabled = true;
-  try { out.textContent = (await post('/api/dispatch')).answer; } catch (e) { out.textContent = e.message; }
-  b.disabled = false;
-};
+async function loadRows(fit) {
+  ROWS = await getJSON('/api/requests');
+  const open = ROWS.filter(r => r.status !== 'Resolved'), n = f => open.filter(f).length;
+  $('#counts').innerHTML = [['Open', open.length, '#13294B'], ['Critical', n(r => r.level === 'Critical'), LVL.Critical], ['High', n(r => r.level === 'High'), LVL.High], ['On the way', n(r => r.status === 'On the way'), ST['On the way']]]
+    .map(([l, v, c]) => `<div class="count"><b style="color:${c}">${v}</b><span>${l}</span></div>`).join('');
+  $('#cards').innerHTML = ROWS.length ? ROWS.map(card).join('') : '<div class="empty">No requests yet. Send one from Get help, or load demo requests.</div>';
+  document.querySelectorAll('.card').forEach(el => el.onclick = () => selectReq(el.dataset.id, true));
+  Object.values(markers).forEach(m => m.remove()); markers = {};
+  ROWS.forEach(r => { const done = r.status === 'Resolved';
+    markers[r.id] = L.circleMarker([r.lat, r.lon], { radius: done ? 6 : 10, weight: 3, color: '#fff', fillColor: done ? '#9CA3AF' : LVL[r.level], fillOpacity: 1 })
+      .bindTooltip(`${r.id}: ${r.level}${done ? ' (resolved)' : ''}`).on('click', () => selectReq(r.id, false)).addTo(opsmap); });
+  if (fit && ROWS.length) opsmap.fitBounds(ROWS.map(r => [r.lat, r.lon]), { padding: [40, 40], maxZoom: 12 });
+  if (!selId && ROWS.length) selId = ROWS[0].id;
+  if (selId && ROWS.find(r => r.id === selId)) selectReq(selId, false);
+}
+function card(r) {
+  const flags = r.why.map(w => `<span class="flag">${esc(w)}</span>`).join('') + `<span class="flag">${r.people} ${r.people === 1 ? 'person' : 'people'}</span>`;
+  return `<div class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Resolved' ? 'done' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
+    <div class="cardtop"><span class="lvl" style="color:${LVL[r.level]}">${r.level}</span><span class="status" style="background:${ST[r.status]}">${r.status}</span></div>
+    <div class="meta">${r.id}, sent ${esc(r.time)}${r.name ? ', ' + esc(r.name) : ''}${r.sample ? ', demo' : ''}</div>
+    <div class="where">${esc(r.label)}</div><div class="flags">${flags}</div></div>`;
+}
+function selectReq(id, fly) {
+  selId = id; const r = ROWS.find(x => x.id === id); if (!r) return;
+  document.querySelectorAll('.card').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
+  if (fly) opsmap.setView([r.lat, r.lon], 13);
+  const A = { danger: 'In immediate danger', rising: 'Water rising', trapped: 'Trapped', injured: 'Someone injured', evacuate: 'Can leave safely', vulnerable: 'Elderly or disabled with them' };
+  const ans = Object.entries(A).map(([k, l]) => { const v = r.answers[k] || 'no answer'; return `<span>${l}</span><span class="${v}">${v === 'unsure' ? 'not sure' : v}</span>`; }).join('');
+  const h = r.history, p = PLACES && PLACES.find(x => x.id === h.id), near = p && h.km <= 10;
+  const yr = d => esc(String(d).slice(0, 4));
+  const photo = near ? (p.before
+      ? `<div class="compare" id="cmp"><img src="/img/${p.id}?w=520" alt="After the flood"><img class="before" src="/img/${p.before}?w=520" alt="Before the flood" style="clip-path:inset(0 50% 0 0)"><div class="bar"></div><input type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div><div class="caps"><span>Before, ${yr(p.before_date)}</span><span>Drag to compare</span><span>After, ${yr(p.date)}</span></div>`
+      : `<div class="compare"><img src="/img/${p.id}?w=520" alt="After the flood"></div><div class="caps"><span>After, ${yr(p.date)}</span><span>No before photo for this spot</span></div>`)
+      + `<button class="btn ghost" id="aicheck" style="width:100%">Check this photo for flooding</button><div class="why" id="aiout" hidden></div>`
+    : '<p class="muted">No aerial flood photos within 10 km of this request.</p>';
+  $('#detail').innerHTML = `<h2>${r.id}: <span style="color:${LVL[r.level]}">${r.level}</span> <span class="muted" style="font-weight:500;font-size:1rem">${r.score} points</span></h2>
+    <div class="meta">Sent ${esc(r.time)}. ${esc(r.label)}. ${r.people} ${r.people === 1 ? 'person' : 'people'}${r.phone ? '. Phone ' + esc(r.phone) : ''}${r.name ? '. ' + esc(r.name) : ''}.</div>
+    <div class="dgrid"><div>
+      ${r.reason ? `<div class="why"><b>Why:</b> ${esc(r.reason)}</div>` : ''}
+      <div class="answers">${ans}</div>
+      <div class="why" style="margin-top:14px">Past flooding nearby: ${esc(h.event)} aerial photo ${h.km} km away${h.rain ? `, ${esc(h.rain)} of rain the week before` : ''}. Adds ${r.flood_pts} of the ${r.score} points.</div>
+      <div class="actions">${r.status !== 'On the way' ? '<button class="btn" data-s="On the way">Mark on the way</button>' : ''}${r.status !== 'Resolved' ? '<button class="btn ghost" data-s="Resolved">Mark resolved</button>' : ''}${r.status !== 'Open' ? '<button class="btn ghost" data-s="Open">Reopen</button>' : ''}</div>
+    </div><div><b style="color:var(--ink)">Aerial photo of the area</b>${near ? `<div class="meta" style="margin:2px 0 8px">${esc(p.place)}, ${h.km} km from this request</div>` : ''}${photo}</div></div>`;
+  document.querySelectorAll('.actions button').forEach(b => b.onclick = async () => { await post(`/api/requests/${r.id}/status`, { status: b.dataset.s }); loadRows(false); });
+  const cmp = $('#cmp'); if (cmp) { const s = cmp.querySelector('input'); s.oninput = () => { cmp.querySelector('.before').style.clipPath = `inset(0 ${100 - s.value}% 0 0)`; cmp.querySelector('.bar').style.left = s.value + '%'; }; }
+  const ai = $('#aicheck'); if (ai) ai.onclick = async () => { const o = $('#aiout'); o.hidden = false; o.textContent = 'Checking the photo… about 10 seconds.'; ai.disabled = true;
+    try { o.textContent = (await post('/api/ask', { id: p.id, question: 'Is floodwater covering normally dry land? Give one visible clue.', history: [] })).answer; } catch (e) { o.textContent = e.message; } ai.disabled = false; };
+}
+$('#samplebtn').onclick = async () => { $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
+$('#briefbtn').onclick = async () => { const o = $('#brief'); o.hidden = false; o.textContent = 'Reading the open requests… about 10 seconds.'; $('#briefbtn').disabled = true;
+  try { o.textContent = (await post('/api/requests/briefing')).answer; } catch (e) { o.textContent = e.message; } $('#briefbtn').disabled = false; };
 
-init();
+route();
 </script>
 </body>
 </html>
