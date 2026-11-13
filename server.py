@@ -1034,10 +1034,14 @@ def briefing_ok(text, rows):
     return [level[i] for i in seen] == sorted(level[i] for i in seen) or bool(re.search(r"one crew", text, re.I))
 
 
+BRIEFS = {}  # same open requests -> same checked AI briefing, no second wait
+
+
 def plain_briefing(rows, groups):
     first = f"Send one crew to the hotspot: {groups[0]}. " if groups else ""
-    order = ", ".join(f"{r['id']} ({r['level']})" for r in rows if r["status"] != "Resolved")
-    return first + f"Then work down the list in this order: {order}."
+    taken = set(groups[0].split(", ")) if groups else set()
+    order = ", ".join(f"{r['id']} ({r['level']})" for r in rows if r["status"] != "Resolved" and r["id"] not in taken)
+    return first + (f"Then work down the list in this order: {order}." if order else "")
 
 
 async def api_briefing(request):
@@ -1064,9 +1068,12 @@ async def api_briefing(request):
               "Always put every Critical request before any High, and High before Medium. If a hotspot contains urgent requests, say one crew can cover it together. "
               "For each request, use only the reasons written next to it, in the same words. Never add a condition that is not listed for that request: "
               "for example, never call someone trapped or injured unless 'Trapped' or 'Someone injured' is in their reasons. "
-              "When a reason starts with 'Not sure:', keep the words 'not sure' (for example 'not sure if in immediate danger').")
+              "When a reason starts with 'Not sure:', keep the words 'not sure' (for example 'not sure if in immediate danger'). "
+              "Describe each request only with its own reasons; never carry a reason over from the request before it.")
+    if table in BRIEFS:
+        return JSONResponse({"answer": BRIEFS[table], "ai": True})
     answer = None
-    for _ in range(2):
+    for _ in range(3):
         try:
             text = await run_in_threadpool(ask_ai, [{"role": "system", "content": system}, {"role": "user", "content": table}], 300)
         except Exception:
@@ -1075,7 +1082,9 @@ async def api_briefing(request):
             answer = text
             break
     ai = answer is not None
-    if not ai:
+    if ai:
+        BRIEFS[table] = answer
+    else:
         answer = plain_briefing(rows, groups)
     return JSONResponse({"answer": answer, "ai": ai})
 

@@ -80,7 +80,9 @@
   .hhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .hhead b { font-size: 1.05rem; color: var(--text); }
   .aipill { font-size: .78rem; font-weight: 700; color: #3B5BDB; background: #E7EEFF; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
-  .aiblock { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: #FBFBFC; margin: 12px 0; }
+  .aiblock { border: 1px solid #C9D6FB; border-left: 4px solid #3B5BDB; border-radius: 12px; padding: 14px 16px; background: #F5F8FF; margin: 12px 0; }
+  .aiblock .human { margin: 10px 0 0; font-size: .85rem; color: var(--muted); }
+  .compare img.after { filter: brightness(1.35) contrast(1.08); }
   .aiblock .hhead { margin-bottom: 8px; }
   .aiblock p { margin: 0; line-height: 1.6; }
   .hsub { font-size: .82rem; color: var(--muted); margin: 4px 0 12px; }
@@ -204,7 +206,7 @@
       <div class="queuehead">
         <div class="counts" id="counts"></div>
         <div class="qbtns"><button class="btn" id="briefbtn">Who to reach first</button><button class="btn ghost" id="samplebtn" hidden>Reset demo</button></div>
-        <div class="aiblock" id="brief" hidden><div class="hhead"><b>Who to reach first</b><span style="display:flex;gap:8px;align-items:center"><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span><button id="briefhide" type="button" aria-label="Hide the briefing" style="font:inherit;font-size:.82rem;font-weight:700;background:none;border:0;color:var(--ink);text-decoration:underline;cursor:pointer;padding:0">Hide</button></span></div><p id="briefout" style="white-space:pre-line;max-height:190px;overflow-y:auto"></p></div>
+        <div class="aiblock" id="brief" hidden><div class="hhead"><b>Who to reach first</b><span style="display:flex;gap:8px;align-items:center"><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span><button id="briefhide" type="button" aria-label="Hide the briefing" style="font:inherit;font-size:.82rem;font-weight:700;background:none;border:0;color:var(--ink);text-decoration:underline;cursor:pointer;padding:0">Hide</button></span></div><p id="briefout" style="white-space:pre-line;max-height:190px;overflow-y:auto"></p><p class="human">This is a suggested order. A responder decides who to send.</p></div>
       </div>
       <div id="cards"></div>
     </div>
@@ -235,6 +237,7 @@
     <h1>How Texas Flood Check works</h1>
     <p>Triage analysis in a timely manner, for flood assistance. Residents submit a request with their information. The AI analyzes it and identifies how urgent it is. Each request is pushed to first responders and ranked by triage status. This improves access to assistance, reduces the load on responders, and keeps people accountable.</p>
     <p class="muted">An area's flood history counts, but it never outranks someone who says they're in danger right now.</p>
+    <p><b>A person always decides.</b> The AI writes the summaries and the points suggest an order, but a responder chooses who to send.</p>
     <h2>Where the AI is used</h2>
     <table>
       <tr><th>What (look for the <span class="aipill" title="Written by the AI model on our Dell">AI-generated</span> label on screen)</th><th>Why it needs AI</th></tr>
@@ -515,7 +518,9 @@ async function openOps() {
   setTimeout(() => opsmap.invalidateSize(), 60);
   if (!PLACES) getJSON('/api/places').then(p => { PLACES = p; if (selId) selectReq(selId, false, true); }).catch(() => {});
   await loadRows(true);
+  if (!briefAuto && ROWS.some(r => r.status !== 'Resolved')) { briefAuto = true; $('#briefbtn').click(); }
 }
+let briefAuto = false;
 let KNOWN = null;
 async function loadRows(fit, auto) {
   const prev = ROWS;
@@ -578,8 +583,8 @@ function selectReq(id, fly, keepView) {
   const inPhoto = bx && bx[0] >= 0 && bx[0] <= 1 && bx[1] >= 0 && bx[1] <= 1;
   const pin = inPhoto ? `<div title="This request" style="position:absolute;left:${bx[0] * 100}%;top:${bx[1] * 100}%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#B91C1C;border:3px solid #fff;box-shadow:0 0 0 2px #B91C1C;z-index:3;pointer-events:none"></div>` : '';
   const photo = near ? (p.before
-      ? `<div class="compare" id="cmp"><img src="/img/${p.id}?w=520" alt="After the flood"><img class="before" src="/img/${p.before}?w=520" alt="Before the flood" style="clip-path:inset(0 50% 0 0)"><div class="bar"></div>${pin}<input type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div><div class="caps"><span>Before, ${yr(p.before_date)} (USDA)</span><span>Drag to compare</span><span>After, ${yr(p.date)} (NOAA)</span></div>`
-      : `<div class="compare"><img src="/img/${p.id}?w=520" alt="After the flood">${pin}</div><div class="caps"><span>After, ${yr(p.date)} (NOAA)</span></div>`)
+      ? `<div class="compare" id="cmp"><img class="after" src="/img/${p.id}?w=520" alt="After the flood"><img class="before" src="/img/${p.before}?w=520" alt="Before the flood" style="clip-path:inset(0 50% 0 0)"><div class="bar"></div>${pin}<input type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div><div class="caps"><span>Before, ${yr(p.before_date)} (USDA)</span><span>Drag to compare</span><span>After, ${yr(p.date)} (NOAA)</span></div>`
+      : `<div class="compare"><img class="after" src="/img/${p.id}?w=520" alt="After the flood">${pin}</div><div class="caps"><span>After, ${yr(p.date)} (NOAA)</span></div>`)
       + (v ? `<div class="aiblock"><div class="hhead"><b>Photo check</b><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span></div><p><span class="status" style="background:${v[1]}">${v[0]}</span> ${esc(r.verdict_text)}</p></div>` : '')
     : !PLACES ? '<p class="muted">Loading the aerial photo…</p>' : `<p class="muted">No aerial photo from a past flood within 3 km of this request. We only have aerial photos of 13 neighborhoods (${esc(h.place)} is the closest, ${Math.round(h.km)} km away).</p>`;
   const actions = [['On the way', 'Mark on the way'], ['Resolved', 'Mark resolved'], ['New', 'Reopen']].filter(([s]) => s !== r.status && !(s === 'New' && r.status === 'New'))
