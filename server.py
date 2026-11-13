@@ -967,8 +967,13 @@ def briefing_ok(text, rows):
             continue
         seg = p.lower().split(".")[0]
         for word, reason in CLAIMS.items():
-            if word in seg and current[0] in by_id and reason.lower() not in by_id[current[0]]:
-                return False
+            if word in seg and current[0] in by_id:
+                said = by_id[current[0]]
+                if reason.lower() not in said:
+                    return False
+                unsure_only = ("not sure: " + reason.lower()) in said and (", " + reason.lower()) not in (", " + said)
+                if unsure_only and not re.search(r"not sure|unsure|maybe|possibl", seg):
+                    return False
     # order: no request may be mentioned before (or instead of) an open request with a higher priority
     rank = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
     level = {r["id"]: rank.get(r["level"], 9) for r in rows if r["status"] != "Resolved"}
