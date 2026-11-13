@@ -130,7 +130,7 @@
     <div class="split">
       <div>
         <div class="compare" id="cmp"><img id="after" alt="After the flood"><img id="before" alt="Before the flood" style="clip-path: inset(0 50% 0 0)"><div class="bar" id="bar"></div><input id="wipe" type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div>
-        <div class="caps"><span id="capb"></span><span>Drag across the photo</span><span id="capa"></span></div>
+        <div class="caps"><span id="capb"></span><span id="caphint">Drag across the photo</span><span id="capa"></span></div>
         <div class="strip" id="strip"></div>
         <p class="note" id="stripnote"></p>
       </div>
@@ -264,6 +264,7 @@ function openPhoto(p) {
   const hasBefore = !!p.before;
   $('#before').style.display = hasBefore ? '' : 'none'; $('#bar').style.display = hasBefore ? '' : 'none'; $('#wipe').style.display = hasBefore ? '' : 'none';
   if (hasBefore) { $('#before').src = `/img/${p.before}?w=720`; $('#wipe').value = 50; $('#before').style.clipPath = 'inset(0 50% 0 0)'; $('#bar').style.left = '50%'; }
+  $('#caphint').style.display = hasBefore ? '' : 'none';
   $('#capb').textContent = hasBefore ? `Before: ${fmtDate(p.before_date)}, ${p.before_source}` : 'No before photo for this spot';
   $('#capa').textContent = `After: ${fmtDate(p.date)}, ${p.source}`;
   renderChat();
@@ -274,7 +275,9 @@ $('#wipe').oninput = e => { $('#before').style.clipPath = `inset(0 ${100 - e.tar
 async function describe(p) {
   summary[p.id] = { pending: true }; renderChat();
   try {
-    const q = 'In 3 plain sentences: what does the after photo show compared with before? Start with Yes, No, or Unclear: is floodwater covering normally dry land?';
+    const q = p.before
+      ? 'In 3 plain sentences: what does the after photo show compared with before? Start with Yes, No, or Unclear: is floodwater covering normally dry land?'
+      : 'This is one aerial photo taken days after a flood. In 3 plain sentences: what does it show? Start with Yes, No, or Unclear: is floodwater or fresh flood damage (mud, debris, stripped riverbanks) visible?';
     const a = (await post('/api/ask', { id: p.id, question: q, history: [] })).answer;
     summary[p.id] = { text: a, q };
   } catch (e) { summary[p.id] = { error: e.message }; }
