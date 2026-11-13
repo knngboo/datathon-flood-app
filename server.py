@@ -544,6 +544,16 @@ def all_gauges():
 
 
 USGS = {}
+ABBR = {"ck": "Creek", "cr": "Creek", "nr": "near", "rv": "River", "r": "River", "abv": "above", "blw": "below", "fk": "Fork", "at": "at",
+        "w": "West", "e": "East", "n": "North", "s": "South", "bayou": "Bayou", "trib": "tributary", "dr": "Drive", "rd": "Road", "hwy": "Highway",
+        "st": "Street", "lk": "Lake", "res": "Reservoir", "tx": "TX"}
+
+
+def plain_site(name):
+    """USGS site names are abbreviated ('Langham Ck nr Addicks, TX'); spell them out."""
+    import re
+    words = re.split(r"(\W+)", name)
+    return "".join(ABBR.get(w.lower(), w.title() if w.isupper() or w.islower() else w) for w in words)
 
 
 def usgs_gauges(lat, lon):
@@ -565,7 +575,7 @@ def usgs_gauges(lat, lon):
         g = ts["sourceInfo"]["geoLocation"]["geogLocation"]
         first, last = float(vals[0]["value"]), float(vals[-1]["value"])
         change = round(last - first, 2)
-        out.append({"name": ts["sourceInfo"]["siteName"].title().replace(" Tx", " TX"), "km": round(km(lat, lon, g["latitude"], g["longitude"]), 1),
+        out.append({"name": plain_site(ts["sourceInfo"]["siteName"]), "km": round(km(lat, lon, g["latitude"], g["longitude"]), 1),
                     "source": "USGS", "stage": last, "unit": "ft", "change": change,
                     "category": "rising" if change >= .2 else "falling" if change <= -.2 else "steady"})
     out = sorted([g for g in out if g["km"] <= 20], key=lambda x: x["km"])[:3]
