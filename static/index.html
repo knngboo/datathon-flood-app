@@ -326,11 +326,21 @@ const QUESTIONS = [
   ['vulnerable', 'Is anyone with you elderly or disabled?', 'Or a baby, or anyone who needs help moving.', YN],
 ];
 const LABEL = Object.fromEntries(QUESTIONS.map(([k, , , o]) => [k, Object.fromEntries(o)]));
-const S = { step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, done: null };
+const S = Object.assign({ step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, done: null },
+  JSON.parse(sessionStorage.getItem('helpState') || '{}'));
+const saveState = () => sessionStorage.setItem('helpState', JSON.stringify(S));
+let lastStep = S.step;
+window.addEventListener('popstate', e => {
+  if ((location.hash || '#help') === '#help' && e.state && typeof e.state.step === 'number' && !S.done) { S.step = e.state.step; lastStep = S.step; renderStep(true); }
+});
 const TOTAL = QUESTIONS.length + 3;
 let pinmap, pickmap, pin;
 
-function renderStep() {
+function renderStep(fromHistory) {
+  saveState();
+  if (!fromHistory && S.step !== lastStep && !S.done) history.pushState({ step: S.step }, '', '#help');
+  if (!history.state || typeof history.state.step !== 'number') history.replaceState({ step: S.step }, '', location.hash || '#help');
+  lastStep = S.step;
   $('#prog').style.width = (S.done ? 100 : (S.step / TOTAL) * 100) + '%';
   $('#stepno').textContent = S.done ? '' : S.step === 0 ? 'First, your location' : S.step <= QUESTIONS.length ? `Question ${S.step} of ${QUESTIONS.length}` : S.step === QUESTIONS.length + 1 ? 'Almost done' : 'Last step: review';
   $('#back').style.visibility = S.step > 0 && !S.done ? 'visible' : 'hidden';
@@ -462,13 +472,13 @@ function renderDone(box) {
       <p style="margin-top:12px">Responders see your request as <b style="color:${c}">${d.level}</b> priority, number <b>${d.position}</b> on their list. If anything gets worse, send a new request or call 911.</p>
     </div>
     <p style="margin-top:18px"><button class="btn ghost" id="again">Send a new request</button></p>`;
-  $('#again').onclick = () => { Object.assign(S, { step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, name: '', phone: '', done: null }); pinmap = null; pickmap = null; renderStep(); };
+  $('#again').onclick = () => { Object.assign(S, { step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, name: '', phone: '', done: null }); sessionStorage.removeItem('helpState'); pinmap = null; pickmap = null; renderStep(); };
   if (!d.reply && !d.replyAsked) {
     d.replyAsked = true;
     post(`/api/requests/${d.id}/reply`, { updated: d.updated })
       .then(r => { d.reply = r.reply; })
       .catch(() => { d.reply = "Stay out of moving water and never drive through a flooded road. Get to the highest safe place you can, keep your phone charged, and call 911 if you are in danger."; })
-      .then(() => { const el = $('#replytext'); if (el && S.done === d) { el.textContent = d.reply; el.classList.add('fadein'); } });
+      .then(() => { saveState(); const el = $('#replytext'); if (el && S.done === d) { el.textContent = d.reply; el.classList.add('fadein'); } });
   }
 }
 
@@ -483,7 +493,7 @@ async function openOps() {
       d.innerHTML = Object.entries(LVL).map(([k, c]) => `<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${k}</div>`).join('') + '<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><span style="width:8px;height:8px;border-radius:50%;background:#9CA3AF"></span>Resolved</div>' + `<div style="display:flex;align-items:center;gap:4px;margin:2px 0">${flame(14)}Hotspot (2+ within ${HOT_KM} km)</div>`; return d; } });
     new Legend({ position: 'bottomleft' }).addTo(opsmap); }
   setTimeout(() => opsmap.invalidateSize(), 60);
-  if (!PLACES) PLACES = await getJSON('/api/places');
+  if (!PLACES) getJSON('/api/places').then(p => { PLACES = p; if (selId) selectReq(selId, false, true); }).catch(() => {});
   await loadRows(true);
 }
 let KNOWN = null;
@@ -551,7 +561,7 @@ function selectReq(id, fly, keepView) {
       ? `<div class="compare" id="cmp"><img src="/img/${p.id}?w=520" alt="After the flood"><img class="before" src="/img/${p.before}?w=520" alt="Before the flood" style="clip-path:inset(0 50% 0 0)"><div class="bar"></div>${pin}<input type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div><div class="caps"><span>Before, ${yr(p.before_date)} (USDA)</span><span>Drag to compare</span><span>After, ${yr(p.date)} (NOAA)</span></div>`
       : `<div class="compare"><img src="/img/${p.id}?w=520" alt="After the flood">${pin}</div><div class="caps"><span>After, ${yr(p.date)} (NOAA)</span></div>`)
       + (v ? `<div class="aiblock"><div class="hhead"><b>Photo check</b><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span></div><p><span class="status" style="background:${v[1]}">${v[0]}</span> ${esc(r.verdict_text)}</p></div>` : '')
-    : `<p class="muted">No aerial photo from a past flood within 3 km of this request. We only have aerial photos of 13 neighborhoods (${esc(h.place)} is the closest, ${Math.round(h.km)} km away).</p>`;
+    : !PLACES ? '<p class="muted">Loading the aerial photo…</p>' : `<p class="muted">No aerial photo from a past flood within 3 km of this request. We only have aerial photos of 13 neighborhoods (${esc(h.place)} is the closest, ${Math.round(h.km)} km away).</p>`;
   const actions = [['On the way', 'Mark on the way'], ['Resolved', 'Mark resolved'], ['New', 'Reopen']].filter(([s]) => s !== r.status && !(s === 'New' && r.status === 'New'))
     .map(([s, l], i) => `<button class="btn ${i ? 'ghost' : ''}" data-s="${s}">${l}</button>`).join('');
   $('#detail').innerHTML = `<h2>${r.id}: <span style="color:${LVL[r.level]}">${r.level}</span> <span class="muted" style="font-weight:500;font-size:1rem">${r.score} points (<a href="#about">how points work</a>)</span></h2>
