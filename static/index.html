@@ -116,6 +116,7 @@
   .qbtns .btn { padding: 9px 12px; font-size: .9rem; }
   .card { background: #fff; margin: 10px 12px; border-radius: 12px; border: 1px solid var(--line); border-left: 6px solid var(--line); padding: 12px 14px; cursor: pointer; }
   .card.sel { box-shadow: 0 0 0 2px var(--ink); }
+  .card:focus-visible { outline: 3px solid #2563EB; outline-offset: 2px; }
   .card.done { opacity: .55; }
   .card.fresh { animation: freshin 2.5s ease-out 2; }
   @keyframes freshin { 0% { box-shadow: 0 0 0 3px #2563EB; } 100% { box-shadow: 0 0 0 0 transparent; } }
@@ -355,7 +356,7 @@ $('#back').onclick = () => { if (S.step > 0) { S.step--; if (S.step === 2 && S.a
 function renderWhere(box) {
   box.innerHTML = `<h1 class="q">Where are you?</h1>
     <p class="hint">Start typing your street address, then pick it from the list.</p>
-    <div id="chosen" class="chosen" hidden><div class="top"><span>Sending help to<br><b id="chosenlabel"></b></span><button type="button" id="change">Change</button></div><div id="pinmap"></div></div>
+    <div id="chosen" class="chosen" hidden><div class="top"><span>Responders will see this location<br><b id="chosenlabel"></b></span><button type="button" id="change">Change</button></div><div id="pinmap"></div></div>
     <div id="finder">
       <div class="search"><div style="display:flex;gap:8px"><input id="addr" placeholder="Address or ZIP code" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sugg"><button class="btn" type="button" id="addrgo">Search</button></div><ul class="sugg" id="sugg" role="listbox" hidden></ul></div>
       <p class="hint small" id="addrmsg">Don't see your address in the list? Type the full street and tap Search.</p>
@@ -498,7 +499,7 @@ async function loadRows(fit, auto) {
     .map(([l, v, c]) => `<div class="count"><b style="color:${c}">${v}</b><span>${l}</span></div>`).join('');
   HOT = hotspots(ROWS);
   $('#cards').innerHTML = ROWS.length ? ROWS.map(card).join('') : '<div class="empty">No requests right now.</div>';
-  document.querySelectorAll('.card').forEach(el => el.onclick = () => selectReq(el.dataset.id, true));
+  document.querySelectorAll('.card').forEach(el => { el.onclick = () => selectReq(el.dataset.id, true); el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectReq(el.dataset.id, true); } }; });
   Object.values(markers).forEach(m => m.remove()); markers = {};
   ROWS.forEach(r => { const done = r.status === 'Resolved';
     markers[r.id] = L.circleMarker([r.lat, r.lon], { radius: done ? 6 : 10, weight: 3, color: '#fff', fillColor: done ? '#9CA3AF' : LVL[r.level], fillOpacity: 1 })
@@ -529,7 +530,7 @@ function shortTag(w) {
 function card(r) {
   const hs = HOT.find(h => h.ids.includes(r.id));
   const flags = r.why.slice(0, 3).map(w => `<span class="flag">${esc(shortTag(w))}</span>`).join('') + (r.why.length > 3 ? `<span class="flag">+${r.why.length - 3} more</span>` : '') + `<span class="flag">${r.people} ${r.people === 1 ? 'person' : 'people'}</span>`;
-  return `<div class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Resolved' ? 'done' : ''} ${hs ? 'hotcard' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
+  return `<div role="button" tabindex="0" aria-label="${r.id}, ${r.level}, ${esc(r.label)}" class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Resolved' ? 'done' : ''} ${hs ? 'hotcard' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
     <div class="cardtop"><span class="lvl" style="color:${LVL[r.level]}">${r.level}</span><span class="status" style="background:${ST[r.status]}">${r.status}</span></div>
     <div class="meta">${r.id}, sent ${esc(r.time)}${r.name ? ', ' + esc(r.name) : ''}${r.sample ? ', demo' : ''}</div>
     <div class="where">${esc(r.label)}</div><div class="flags">${hs ? `<span class="flag hot">${flame(14)}Hotspot: ${hs.ids.length} nearby</span>` : ''}${flags}</div></div>`;
