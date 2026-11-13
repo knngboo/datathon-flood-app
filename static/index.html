@@ -214,8 +214,8 @@
       <tr><th>What (look for the <span class="ai">AI</span> tag on screen)</th><th>Why it needs AI</th></tr>
       <tr><td>A calm reply telling each person what to do while they wait</td><td>Every situation is different; the reply is written from their own answers.</td></tr>
       <tr><td>Reading the aerial photo of the area from a past flood</td><td>Only a vision model can tell whether a photo shows floodwater over streets and homes.</td></tr>
-      <tr><td>The Flood Frequency &amp; Severity summary</td><td>Turns decades of FEMA records into two sentences a responder can read in seconds.</td></tr>
-      <tr><td>"Who to reach first"</td><td>Turns a long list into a short plan for the crew lead.</td></tr>
+      <tr><td>The historical flood insight</td><td>Turns decades of FEMA records into two sentences a responder can read in seconds.</td></tr>
+      <tr><td>"Who to reach first"</td><td>Turns the open requests and hotspots into a short plan for the crew lead.</td></tr>
     </table>
     <p class="muted" style="margin-top:10px">The AI model (Qwen3-VL-8B) runs on the Dell Pro Max GB10 at our table. The ranking itself is plain, visible math below, so anyone can check it.</p>
     <h2>How a request is ranked</h2>
@@ -228,15 +228,21 @@
       <tr><td>Can't leave safely (answered No)</td><td>15</td><td>8</td></tr>
       <tr><td>Someone elderly or disabled</td><td>10</td><td>5</td></tr>
       <tr><td>Each extra person, up to 4</td><td colspan="2">2 each</td></tr>
-      <tr><td>Flood history: frequent FEMA flood disasters in the county, and how many households needed help</td><td colspan="2">up to 10</td></tr>
-      <tr><td>Aerial photo shows the area flooded before</td><td colspan="2">3</td></tr>
+      <tr><td>Flood history: FEMA flood disasters in the county in the last 10 years (5+: 3, 2 to 4: 2, otherwise 1)</td><td colspan="2">up to 3</td></tr>
+      <tr><td>Flood history: households in this ZIP that applied to FEMA in a past flood (1,000+: 3, 100+: 1)</td><td colspan="2">up to 3</td></tr>
+      <tr><td>Aerial photo shows the area flooded before</td><td colspan="2">2</td></tr>
+      <tr><td>A NOAA river gauge nearby is in flood right now (minor / moderate / major)</td><td colspan="2">2 / 3 / 4</td></tr>
     </table>
-    <p class="muted" style="margin-top:10px">Critical: in immediate danger, or trapped with water rising, or 60 points and up. High: 35 and up. Medium: 15 and up. Low: below 15.</p>
+    <p class="muted" style="margin-top:10px">Critical: in immediate danger, or trapped with water rising, or 65 points and up. High: 35 and up. Medium: 15 and up. Low: below 15. History adds at most 8 points, so it can never outrank someone in danger right now.</p>
+    <h2>Hotspots</h2>
+    <p>When two or more open requests are within 1.5 km of each other, the map circles them with a glowing ring and a flame, and their cards glow. One crew could reach all of them in one trip. Hotspots are shown to responders; they don't change anyone's points.</p>
     <h2>Where the data comes from</h2>
     <table>
       <tr><th>Data</th><th>Source</th></tr>
       <tr><td>Flood disasters by county since 1953</td><td>FEMA disaster declarations (OpenFEMA)</td></tr>
-      <tr><td>Households that asked for help, by ZIP code</td><td>FEMA housing assistance records (OpenFEMA)</td></tr>
+      <tr><td>Households that applied for help, by ZIP code</td><td>FEMA housing assistance records (OpenFEMA)</td></tr>
+      <tr><td>Flood zone at the exact spot</td><td>FEMA National Flood Hazard Layer (the data behind FEMA's Flood Map Service Center)</td></tr>
+      <tr><td>River levels right now</td><td>NOAA National Water Prediction Service (live gauges)</td></tr>
       <tr><td>Aerial photos after past floods</td><td><a href="https://storms.ngs.noaa.gov/" target="_blank">NOAA emergency response imagery</a> (Harvey 2017, Hill Country 2025)</td></tr>
       <tr><td>Aerial photos before Harvey</td><td>USDA National Agriculture Imagery Program (2016)</td></tr>
       <tr><td>Photo collection for this event</td><td>Organizers' <a href="https://huggingface.co/datasets/jennifer-fowler/UTSA-flood-images" target="_blank">Hugging Face dataset</a></td></tr>
