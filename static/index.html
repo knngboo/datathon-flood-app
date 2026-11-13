@@ -111,6 +111,7 @@
   .meta { font-size: .82rem; color: var(--muted); }
   .where { font-weight: 600; color: var(--ink); margin: 4px 0 6px; font-size: .95rem; }
   .flags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .flag.hot { display: inline-flex; align-items: center; gap: 3px; background: #FFF7ED; border-color: #FDBA74; color: #9A3412; font-weight: 700; }
   .flag { font-size: .78rem; padding: 2px 8px; border-radius: 999px; background: var(--wash); border: 1px solid var(--line); }
   .status { font-size: .78rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; color: #fff; }
   .side { display: grid; grid-template-rows: 46% 54%; min-height: 0; }
@@ -248,6 +249,17 @@ const TILES = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street
 const ATTR = 'Esri, OpenStreetMap contributors';
 const LVL = { Critical: '#B91C1C', High: '#C2410C', Medium: '#A16207', Low: '#15803D' };
 const ST = { 'New': '#4B5563', 'On the way': '#1D4ED8', 'Resolved': '#15803D' };
+const flame = sz => `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" aria-hidden="true"><path fill="#EA580C" d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg>`;
+const HOT_KM = 1.5;
+function hotspots(rows) {
+  const open = rows.filter(r => r.status !== 'Resolved'), d = (a, b) => { const R = 6371, t = Math.PI / 180, x = Math.sin((b.lat - a.lat) * t / 2) ** 2 + Math.cos(a.lat * t) * Math.cos(b.lat * t) * Math.sin((b.lon - a.lon) * t / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)); };
+  const seen = new Set(), out = [];
+  for (const r of open) { if (seen.has(r.id)) continue; const group = [r]; seen.add(r.id);
+    for (let i = 0; i < group.length; i++) for (const o of open) if (!seen.has(o.id) && d(group[i], o) <= HOT_KM) { seen.add(o.id); group.push(o); }
+    if (group.length >= 2) out.push({ ids: group.map(g => g.id), lat: group.reduce((s, g) => s + g.lat, 0) / group.length, lon: group.reduce((s, g) => s + g.lon, 0) / group.length, people: group.reduce((s, g) => s + g.people, 0) }); }
+  return out;
+}
+let HOT = [], hotLayer;
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Something went wrong. Try again.'); return j;
@@ -424,7 +436,7 @@ async function openOps() {
       L.DomEvent.on(b, 'click', e => { L.DomEvent.stop(e); if (ROWS.length) opsmap.fitBounds(ROWS.map(r => [r.lat, r.lon]), { padding: [40, 40], maxZoom: 12 }); }); return b; } });
     new All({ position: 'topright' }).addTo(opsmap);
     const Legend = L.Control.extend({ onAdd() { const d = L.DomUtil.create('div'); d.style.cssText = 'background:#fff;padding:8px 10px;border-radius:8px;border:1px solid #D1D7E0;font:600 12px Public Sans,system-ui;color:#1F2937';
-      d.innerHTML = Object.entries(LVL).map(([k, c]) => `<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${k}</div>`).join('') + '<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><span style="width:8px;height:8px;border-radius:50%;background:#9CA3AF"></span>Resolved</div>'; return d; } });
+      d.innerHTML = Object.entries(LVL).map(([k, c]) => `<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><span style="width:10px;height:10px;border-radius:50%;background:${c}"></span>${k}</div>`).join('') + '<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><span style="width:8px;height:8px;border-radius:50%;background:#9CA3AF"></span>Resolved</div>' + `<div style="display:flex;align-items:center;gap:4px;margin:2px 0">${flame(14)}Hotspot (2+ within ${HOT_KM} km)</div>`; return d; } });
     new Legend({ position: 'bottomleft' }).addTo(opsmap); }
   setTimeout(() => opsmap.invalidateSize(), 60);
   if (!PLACES) PLACES = await getJSON('/api/places');
@@ -433,8 +445,9 @@ async function openOps() {
 async function loadRows(fit) {
   ROWS = await getJSON('/api/requests');
   const open = ROWS.filter(r => r.status !== 'Resolved'), n = f => open.filter(f).length;
-  $('#counts').innerHTML = [['Open', open.length, '#13294B'], ['Critical', n(r => r.level === 'Critical'), LVL.Critical], ['High', n(r => r.level === 'High'), LVL.High], ['On the way', n(r => r.status === 'On the way'), ST['On the way']]]
+  $('#counts').innerHTML = [['Open', open.length, '#13294B'], ['Critical', n(r => r.level === 'Critical'), LVL.Critical], ['Hotspots', hotspots(ROWS).length, '#EA580C'], ['On the way', n(r => r.status === 'On the way'), ST['On the way']]]
     .map(([l, v, c]) => `<div class="count"><b style="color:${c}">${v}</b><span>${l}</span></div>`).join('');
+  HOT = hotspots(ROWS);
   $('#cards').innerHTML = ROWS.length ? ROWS.map(card).join('') : '<div class="empty">No requests right now.</div>';
   document.querySelectorAll('.card').forEach(el => el.onclick = () => selectReq(el.dataset.id, true));
   Object.values(markers).forEach(m => m.remove()); markers = {};
@@ -442,16 +455,21 @@ async function loadRows(fit) {
     markers[r.id] = L.circleMarker([r.lat, r.lon], { radius: done ? 6 : 10, weight: 3, color: '#fff', fillColor: done ? '#9CA3AF' : LVL[r.level], fillOpacity: 1 })
       .bindTooltip(`${r.id}: ${r.level}${done ? ' (resolved)' : ''}`).on('click', () => selectReq(r.id, false)).addTo(opsmap); });
   $('#briefbtn').disabled = !open.length;
+  if (hotLayer) hotLayer.remove();
+  hotLayer = L.layerGroup(HOT.map(h => L.marker([h.lat, h.lon], { zIndexOffset: 1000, icon: L.divIcon({ className: '', iconSize: [44, 44], iconAnchor: [22, 62],
+    html: `<div style="position:relative">${flame(40)}<span style="position:absolute;right:-4px;top:-2px;background:#13294B;color:#fff;font:800 11px Public Sans,system-ui;border-radius:999px;padding:1px 6px;border:2px solid #fff">${h.ids.length}</span></div>` }) })
+    .bindTooltip(`Hotspot: ${h.ids.length} open requests within ${HOT_KM} km (${h.people} people). Send one crew.`).on('click', () => selectReq(h.ids[0], false)))).addTo(opsmap);
   if (fit && ROWS.length) opsmap.fitBounds(ROWS.map(r => [r.lat, r.lon]), { padding: [40, 40], maxZoom: 12 });
   if (!selId && ROWS.length) selId = ROWS[0].id;
   if (selId && ROWS.find(r => r.id === selId)) selectReq(selId, false);
 }
 function card(r) {
+  const hs = HOT.find(h => h.ids.includes(r.id));
   const flags = r.why.slice(0, 3).map(w => `<span class="flag">${esc(w.split(':')[0].split(';')[0])}</span>`).join('') + (r.why.length > 3 ? `<span class="flag">+${r.why.length - 3} more</span>` : '') + `<span class="flag">${r.people} ${r.people === 1 ? 'person' : 'people'}</span>`;
   return `<div class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Resolved' ? 'done' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
     <div class="cardtop"><span class="lvl" style="color:${LVL[r.level]}">${r.level}</span><span class="status" style="background:${ST[r.status]}">${r.status}</span></div>
     <div class="meta">${r.id}, sent ${esc(r.time)}${r.name ? ', ' + esc(r.name) : ''}${r.sample ? ', demo' : ''}</div>
-    <div class="where">${esc(r.label)}</div><div class="flags">${flags}</div></div>`;
+    <div class="where">${esc(r.label)}</div><div class="flags">${hs ? `<span class="flag hot">${flame(14)}Hotspot: ${hs.ids.length} nearby</span>` : ''}${flags}</div></div>`;
 }
 function selectReq(id, fly) {
   selId = id; const r = ROWS.find(x => x.id === id); if (!r) return;
@@ -473,6 +491,7 @@ function selectReq(id, fly) {
     .map(([s, l], i) => `<button class="btn ${i ? 'ghost' : ''}" data-s="${s}">${l}</button>`).join('');
   $('#detail').innerHTML = `<h2>${r.id}: <span style="color:${LVL[r.level]}">${r.level}</span> <span class="muted" style="font-weight:500;font-size:1rem">${r.score} points (<a href="#about">how points work</a>)</span></h2>
     <div class="meta" style="font-size:.92rem">Sent ${esc(r.time)}. ${esc(r.label)}. ${r.people} ${r.people === 1 ? 'person' : 'people'}${r.phone ? '. Phone ' + esc(r.phone) : ''}${r.name ? '. ' + esc(r.name) : ''}.</div>
+    ${(() => { const hs = HOT.find(h => h.ids.includes(r.id)); return hs ? `<div class="why" style="display:flex;gap:8px;align-items:center;background:#FFF7ED;border:1px solid #FDBA74">${flame(20)}<span><b>Hotspot.</b> ${hs.ids.length} open requests within ${HOT_KM} km of each other (${hs.ids.join(', ')}), ${hs.people} people in total. One crew could reach all of them.</span></div>` : ''; })()}
     <div class="actions" style="margin:12px 0 4px">${actions}</div>
     <div class="dgrid"><div>
       <div class="sec" style="border-top:0;padding-top:0">Situation</div>

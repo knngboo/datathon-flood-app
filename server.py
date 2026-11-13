@@ -162,7 +162,7 @@ def read_households():
 
 # ---------- routes ----------
 async def index(request):
-    return FileResponse(HERE / "static" / "index.html")
+    return FileResponse(HERE / "static" / "index.html", headers={"Cache-Control": "no-store"})
 
 
 async def api_places(request):
@@ -246,6 +246,8 @@ async def api_geo(request):
         return JSONResponse({"error": "Type at least a street, town or ZIP code."}, status_code=400)
     try:
         hits = await run_in_threadpool(suggest, q)
+        if not hits:
+            hits = await run_in_threadpool(photon, q)
     except Exception as e:
         return JSONResponse({"error": "Address search isn't reachable right now. Use your current location instead."}, status_code=502)
     if not hits:
@@ -732,6 +734,8 @@ SAMPLES = [
     ({"danger": "no", "rising": "no", "trapped": "no", "injured": "no", "evacuate": "yes", "vulnerable": "no"}, 1),
     ({"danger": "no", "rising": "unsure", "trapped": "yes", "injured": "no", "evacuate": "no", "vulnerable": "no"}, 2),
     ({"danger": "no", "rising": "no", "trapped": "no", "injured": "no", "evacuate": "unsure", "vulnerable": "yes"}, 2),
+    ({"danger": "no", "rising": "yes", "trapped": "yes", "injured": "no", "evacuate": "no", "vulnerable": "no"}, 2),
+    ({"danger": "unsure", "rising": "yes", "trapped": "no", "injured": "yes", "evacuate": "no", "vulnerable": "no"}, 5),
 ]
 
 
@@ -771,9 +775,11 @@ def seed_samples(reset=False):
 def _seed(reset):
     rows = [] if reset else read_requests()
     rng = random.Random()
-    for i, ((a, people), pid) in enumerate(zip(SAMPLES, sample_photo_ids())):
+    ids = sample_photo_ids()
+    ids = ids + [ids[0], ids[0]]  # two more near the first spot, so the demo has a real hotspot
+    for i, ((a, people), pid) in enumerate(zip(SAMPLES, ids)):
         p = place(pid)
-        lat, lon = p["lat"] + rng.uniform(-.004, .004), p["lon"] + rng.uniform(-.004, .004)
+        lat, lon = p["lat"] + rng.uniform(-.006, .006), p["lon"] + rng.uniform(-.006, .006)
         r = make_report(lat, lon, f"Near {p['place']}", a, people, "", "", True, (p["lat"], p["lon"]))
         r["id"] = f"R{len(rows) + 1:03d}"
         rows.append(r)
