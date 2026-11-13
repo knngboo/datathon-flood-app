@@ -383,6 +383,8 @@ async def api_dispatch(request):
 
 
 REQUESTS = Path(os.environ.get("REQUESTS", HERE / "requests.jsonl"))
+import threading as _t
+LOCK = _t.Lock()
 LEVELS = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
 DEPTH = {"ankle": ("Water ankle deep", 10), "knee": ("Water knee deep", 20), "waist": ("Water waist deep or higher", 35), "unsure": ("Depth not sure", 10)}
 NEED = {"stay": "Needs a place to stay", "cleanup": "Needs help cleaning out", "repairs": "Needs repairs",
@@ -678,6 +680,16 @@ async def api_request(request: Request):
     r = await run_in_threadpool(make_report, lat, lon, str(b.get("label", ""))[:160], a, people,
                                 str(b.get("name", ""))[:60], str(b.get("phone", ""))[:30])
     r["ts"] = time.time()
+    with LOCK:
+        r = save_request(r, lat, lon)
+    dup = r.pop("_dup")
+    pos = [x["id"] for x in read_requests() if x["status"] != "Resolved"].index(r["id"]) + 1
+    reply = await run_in_threadpool(write_reply, r, r["id"], bool(dup))
+    return JSONResponse({"id": r["id"], "updated": bool(dup), "level": r["level"], "position": pos, "reply": reply})
+
+
+def save_request(r, lat, lon):
+    import time
     rows = read_requests()
     dup = next((x for x in rows if x["status"] != "Resolved" and not x.get("sample") and time.time() - x.get("ts", 0) < 1800
                 and km(lat, lon, x["lat"], x["lon"]) < 0.05), None)
@@ -688,9 +700,8 @@ async def api_request(request: Request):
         r["id"] = f"R{len(rows) + 1:03d}"
         rows.append(r)
     write_requests(rows)
-    pos = [x["id"] for x in read_requests() if x["status"] != "Resolved"].index(r["id"]) + 1
-    reply = await run_in_threadpool(write_reply, r, r["id"], bool(dup))
-    return JSONResponse({"id": r["id"], "updated": bool(dup), "level": r["level"], "position": pos, "reply": reply})
+    r["_dup"] = bool(dup)
+    return r
 
 
 async def api_requests(request):
@@ -699,11 +710,12 @@ async def api_requests(request):
 
 async def api_status(request: Request):
     b = await request.json()
-    rows = read_requests()
-    for r in rows:
-        if r["id"] == request.path_params["rid"] and b.get("status") in ("New", "On the way", "Resolved"):
-            r["status"] = b["status"]
-    write_requests(rows)
+    with LOCK:
+        rows = read_requests()
+        for r in rows:
+            if r["id"] == request.path_params["rid"] and b.get("status") in ("New", "On the way", "Resolved"):
+                r["status"] = b["status"]
+        write_requests(rows)
     return JSONResponse({"ok": True})
 
 
@@ -746,6 +758,11 @@ def warm_samples():
 
 
 def seed_samples(reset=False):
+    with LOCK:
+        _seed(reset)
+
+
+def _seed(reset):
     rows = [] if reset else read_requests()
     rng = random.Random()
     for i, ((a, people), pid) in enumerate(zip(SAMPLES, sample_photo_ids())):
