@@ -520,9 +520,15 @@ async function loadRows(fit, auto) {
   if (!selId && ROWS.length) selId = ROWS[0].id;
   if (selId && ROWS.find(r => r.id === selId)) selectReq(selId, false, fit);
 }
+function shortTag(w) {
+  if (w.startsWith('Flood-prone')) return 'Flood-prone area';
+  if (w.startsWith('River rising')) return 'River rising fast';
+  if (w.startsWith('Live river')) return 'River gauge in flood';
+  return w.replace('Not sure: in immediate danger', 'Not sure: in danger');
+}
 function card(r) {
   const hs = HOT.find(h => h.ids.includes(r.id));
-  const flags = r.why.slice(0, 3).map(w => `<span class="flag">${esc(w.split(':')[0].split(';')[0])}</span>`).join('') + (r.why.length > 3 ? `<span class="flag">+${r.why.length - 3} more</span>` : '') + `<span class="flag">${r.people} ${r.people === 1 ? 'person' : 'people'}</span>`;
+  const flags = r.why.slice(0, 3).map(w => `<span class="flag">${esc(shortTag(w))}</span>`).join('') + (r.why.length > 3 ? `<span class="flag">+${r.why.length - 3} more</span>` : '') + `<span class="flag">${r.people} ${r.people === 1 ? 'person' : 'people'}</span>`;
   return `<div class="card ${r.id === selId ? 'sel' : ''} ${r.status === 'Resolved' ? 'done' : ''} ${hs ? 'hotcard' : ''}" data-id="${r.id}" style="border-left-color:${LVL[r.level]}">
     <div class="cardtop"><span class="lvl" style="color:${LVL[r.level]}">${r.level}</span><span class="status" style="background:${ST[r.status]}">${r.status}</span></div>
     <div class="meta">${r.id}, sent ${esc(r.time)}${r.name ? ', ' + esc(r.name) : ''}${r.sample ? ', demo' : ''}</div>
