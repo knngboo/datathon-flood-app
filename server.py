@@ -270,7 +270,7 @@ def photon(q):
         if p.get("state") != "Texas":
             continue
         line1 = " ".join(x for x in [p.get("housenumber", ""), p.get("street") or p.get("name", "")] if x).strip()
-        line2 = ", ".join(x for x in [p.get("city") or p.get("county"), "TX", p.get("postcode")] if x)
+        line2 = ", ".join(x for x in [p.get("city") or p.get("county"), "TX", tx_zip(p.get("postcode"))] if x)
         lon, lat = f["geometry"]["coordinates"]
         out.append({"label": f"{line1}, {line2}" if line1 else line2, "lat": lat, "lon": lon})
     return list({o["label"]: o for o in out}.values())[:5]
@@ -293,7 +293,7 @@ def reverse(lat, lon):
     with urllib.request.urlopen(req, timeout=10) as r:
         a = json.loads(r.read()).get("address", {})
     line1 = " ".join(x for x in [a.get("house_number", ""), a.get("road", "")] if x).strip()
-    line2 = ", ".join(x for x in [a.get("city") or a.get("town") or a.get("village") or a.get("county"), "TX", a.get("postcode")] if x)
+    line2 = ", ".join(x for x in [a.get("city") or a.get("town") or a.get("village") or a.get("county"), "TX", tx_zip(a.get("postcode"))] if x)
     return f"Near {line1}, {line2}" if line1 else f"Near {line2}"
 
 
@@ -408,13 +408,19 @@ SAMPLE_PHOTOS = []
 FLOOD_TYPES = ("Flood", "Hurricane", "Severe Storm", "Severe Storm(s)", "Coastal Storm", "Tropical Storm")
 
 
+def tx_zip(z):
+    """Texas ZIP codes start with 7 (or 885 for El Paso); OpenStreetMap sometimes has wrong ones."""
+    z = (z or "")[:5]
+    return z if len(z) == 5 and z.isdigit() and (z.startswith("7") or z.startswith("885")) else ""
+
+
 @lru_cache(maxsize=256)
 def where_is(lat, lon):
     url = "https://nominatim.openstreetmap.org/reverse?" + urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "json", "zoom": 16, "addressdetails": 1})
     req = urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.3 (UTSA datathon demo)"})
     with urllib.request.urlopen(req, timeout=8) as r:
         a = json.loads(r.read()).get("address", {})
-    return (a.get("county") or "").replace(" County", ""), (a.get("postcode") or "")[:5], a.get("state", "")
+    return (a.get("county") or "").replace(" County", ""), tx_zip(a.get("postcode")), a.get("state", "")
 
 
 @lru_cache(maxsize=128)

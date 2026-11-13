@@ -485,7 +485,10 @@ async function loadRows(fit, auto) {
     .bindTooltip(`Hotspot: ${h.ids.length} open requests within ${HOT_KM} km (${h.people} people). Send one crew.`).on('click', () => selectReq(h.ids[0], false))))).addTo(opsmap);
   if (fit && ROWS.length) opsmap.fitBounds(ROWS.map(r => [r.lat, r.lon]), { padding: [40, 40], maxZoom: 12 });
   fresh.forEach(r => { const el = document.querySelector(`.card[data-id="${r.id}"]`); if (el) el.classList.add('fresh'); });
-  if (auto) { document.querySelectorAll('.card').forEach(el => el.classList.toggle('sel', el.dataset.id === selId)); return; }
+  if (auto) { document.querySelectorAll('.card').forEach(el => el.classList.toggle('sel', el.dataset.id === selId));
+    const a = prev.find(r => r.id === selId), b = ROWS.find(r => r.id === selId);
+    if (a && b && JSON.stringify(a) !== JSON.stringify(b)) selectReq(selId, false, true);
+    return; }
   if (!selId && ROWS.length) selId = ROWS[0].id;
   if (selId && ROWS.find(r => r.id === selId)) selectReq(selId, false);
 }
@@ -497,7 +500,7 @@ function card(r) {
     <div class="meta">${r.id}, sent ${esc(r.time)}${r.name ? ', ' + esc(r.name) : ''}${r.sample ? ', demo' : ''}</div>
     <div class="where">${esc(r.label)}</div><div class="flags">${hs ? `<span class="flag hot">${flame(14)}Hotspot: ${hs.ids.length} nearby</span>` : ''}${flags}</div></div>`;
 }
-function selectReq(id, fly) {
+function selectReq(id, fly, keepView) {
   selId = id; const r = ROWS.find(x => x.id === id); if (!r) return;
   document.querySelectorAll('.card').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
   const badAns = (k, a) => k === 'evacuate' ? ({ no: 'yes', yes: 'no' }[a] || a) : a;
@@ -531,7 +534,8 @@ function selectReq(id, fly) {
       <div class="meta" style="margin:0 0 8px">${near ? `Closest aerial photo from a past flood: ${esc(p.place)}. ${inPhoto ? 'The red dot is where this request came from. The outlined box on the map shows the area the photo covers.' : `The request is ${h.km} km from the photo's center, just outside it. The outlined box on the map shows the photo's area.`}` : 'We show the closest aerial photo from a past flood, if one is within 3 km.'}</div>${photo}</div></div>`;
   if (window.footprint) footprint.remove();
   window.footprint = near && p.bounds ? L.rectangle([[p.bounds[1], p.bounds[0]], [p.bounds[3], p.bounds[2]]], { color: '#13294B', weight: 3, fill: true, fillOpacity: 0.06, dashArray: '8 5' }).bindTooltip('Area the aerial photo covers').addTo(opsmap) : null;
-  if (window.footprint) opsmap.fitBounds(footprint.getBounds().extend([r.lat, r.lon]), { padding: [40, 40], maxZoom: 16 });
+  if (keepView) { /* live refresh: leave the map where the responder put it */ }
+  else if (window.footprint) opsmap.fitBounds(footprint.getBounds().extend([r.lat, r.lon]), { padding: [40, 40], maxZoom: 16 });
   else opsmap.setView([r.lat, r.lon], 13);
   document.querySelectorAll('.actions button').forEach(b => b.onclick = async () => { await post(`/api/requests/${r.id}/status`, { status: b.dataset.s }); loadRows(false); });
   const cmp = $('#cmp'); if (cmp) { const s = cmp.querySelector('input'); s.oninput = () => { cmp.querySelector('.before').style.clipPath = `inset(0 ${100 - s.value}% 0 0)`; cmp.querySelector('.bar').style.left = s.value + '%'; }; }
