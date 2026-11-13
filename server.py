@@ -752,8 +752,18 @@ async def api_request(request: Request):
     if r.get("history_pending"):
         rescore_later(r["id"], lat, lon)
     pos = [x["id"] for x in read_requests() if x["status"] != "Resolved"].index(r["id"]) + 1
-    reply = await run_in_threadpool(write_reply, r, r["id"], bool(dup))
-    return JSONResponse({"id": r["id"], "updated": bool(dup), "level": r["level"], "position": pos, "reply": reply})
+    return JSONResponse({"id": r["id"], "updated": bool(dup), "level": r["level"], "position": pos})
+
+
+async def api_reply(request: Request):
+    """The AI reply is fetched separately so the person sees their case number right away."""
+    rid = request.path_params["rid"]
+    r = next((x for x in read_requests() if x["id"] == rid), None)
+    if not r:
+        return JSONResponse({"error": "That request wasn't found."}, status_code=404)
+    b = await request.json()
+    reply = await run_in_threadpool(write_reply, r, rid, bool(b.get("updated")))
+    return JSONResponse({"reply": reply})
 
 
 def save_request(r, lat, lon):
@@ -996,7 +1006,7 @@ threading.Thread(target=warm_samples, daemon=True).start()
 app = Starlette(routes=[
     Route("/", index), Route("/api/history", api_history), Route("/api/feedback", api_feedback, methods=["GET", "POST"]), Route("/api/hoods", api_hoods), Route("/api/hood", api_hood),
     Route("/api/fema", api_fema), Route("/api/ready", api_ready, methods=["POST"]), Route("/api/places", api_places), Route("/api/find", api_find), Route("/api/geo", api_geo), Route("/api/suggest", api_suggest), Route("/api/reverse", api_reverse),
-    Route("/api/request", api_request, methods=["POST"]), Route("/api/requests", api_requests),
+    Route("/api/request", api_request, methods=["POST"]), Route("/api/requests/{rid}/reply", api_reply, methods=["POST"]), Route("/api/requests", api_requests),
     Route("/api/requests/{rid}/status", api_status, methods=["POST"]), Route("/api/requests/samples", api_samples2, methods=["POST"]),
     Route("/api/requests/briefing", api_briefing, methods=["POST"]),
     Mount("/static", StaticFiles(directory=HERE / "static")), Route("/img/{image_id}", img),

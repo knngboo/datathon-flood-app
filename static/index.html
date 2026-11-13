@@ -93,6 +93,15 @@
   .hins { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
   .hins b { color: #111827; }
   .hins p { line-height: 1.6; margin: 6px 0 0; }
+  .spin { display: inline-block; width: 16px; height: 16px; border: 3px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; margin-right: 10px; vertical-align: -3px; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .typing { color: var(--muted); }
+  .dots i { display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%; background: #3B5BDB; animation: blink 1.2s infinite; }
+  .dots i:nth-child(2) { animation-delay: .2s; } .dots i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .2; } 40% { opacity: 1; } }
+  .fadein { animation: fadein .6s ease-out; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .spin, .dots i, .fadein { animation: none; } }
   .bubble-ai { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 14px 0 4px; }
 
   /* responders */
@@ -425,7 +434,7 @@ function renderReview(box) {
     <p class="hint" id="senderr"></p>`;
   $('#fix').onclick = () => { S.step = 1; renderStep(); };
   $('#sendbtn').onclick = async () => {
-    $('#sendbtn').disabled = true; $('#sendbtn').textContent = 'Sending… about 10 seconds';
+    $('#sendbtn').disabled = true; $('#sendbtn').innerHTML = '<span class="spin"></span>Sending your request…';
     try {
       S.done = await post('/api/request', { lat: S.lat, lon: S.lon, label: S.label, answers: S.answers, people: S.people, name: S.name, phone: S.phone });
       renderStep();
@@ -439,11 +448,18 @@ function renderDone(box) {
       <h2>${d.updated ? 'Request updated' : 'Help request sent'}: case ${d.id}</h2>
       ${d.updated ? '<p class="muted">You already asked for help from this spot, so we updated that request instead of making a new one.</p>' : ''}
       ${S.answers.danger === 'yes' || (S.answers.trapped === 'yes' && S.answers.rising === 'yes') ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--critical);color:#fff;border-radius:10px;padding:14px 16px;margin:12px 0 4px"><b style="font-size:1.05rem">${S.answers.danger === 'yes' ? "You said you're in immediate danger." : "You're trapped and the water is rising."} Call 911 now.</b><a href="tel:911" style="background:#fff;color:var(--critical);font-weight:800;padding:8px 16px;border-radius:8px;text-decoration:none">Call 911</a></div>` : ''}
-      <div class="aiblock"><div class="hhead"><b>What to do now</b><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span></div><p>${esc(d.reply)}</p></div>
+      <div class="aiblock"><div class="hhead"><b>What to do now</b><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span></div><p id="replytext" aria-live="polite">${d.reply ? esc(d.reply) : '<span class="typing">Our AI is reading your answers and writing what to do now<span class="dots"><i></i><i></i><i></i></span></span>'}</p></div>
       <p style="margin-top:12px">Responders see your request as <b style="color:${c}">${d.level}</b> priority, number <b>${d.position}</b> on their list. If anything gets worse, send a new request or call 911.</p>
     </div>
     <p style="margin-top:18px"><button class="btn ghost" id="again">Send a new request</button></p>`;
   $('#again').onclick = () => { Object.assign(S, { step: 0, lat: null, lon: null, label: '', answers: {}, people: 1, name: '', phone: '', done: null }); pinmap = null; pickmap = null; renderStep(); };
+  if (!d.reply && !d.replyAsked) {
+    d.replyAsked = true;
+    post(`/api/requests/${d.id}/reply`, { updated: d.updated })
+      .then(r => { d.reply = r.reply; })
+      .catch(() => { d.reply = "Stay out of moving water and never drive through a flooded road. Get to the highest safe place you can, keep your phone charged, and call 911 if you are in danger."; })
+      .then(() => { const el = $('#replytext'); if (el && S.done === d) { el.textContent = d.reply; el.classList.add('fadein'); } });
+  }
 }
 
 /* ================= RESPONDERS ================= */
