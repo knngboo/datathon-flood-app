@@ -633,6 +633,27 @@ def write_requests(rows):
     REQUESTS.write_text("".join(json.dumps(r) + "\n" for r in rows))
 
 
+def history_parts(lat, lon):
+    try:
+        fh = flood_history(lat, lon)
+    except Exception:
+        fh = None
+    hist_pts, hist_why = history_points(fh) if fh else (0, None)
+    try:
+        g = live_gauges(lat, lon)
+    except Exception:
+        g = []
+    flooding = [x for x in g if x["category"] in ("minor", "moderate", "major")]
+    if flooding:
+        hist_pts += {"minor": 2, "moderate": 3, "major": 4}[flooding[0]["category"]]
+        hist_why = (hist_why + "; " if hist_why else "") + f"Live river gauge in {flooding[0]['category']} flood (NOAA)"
+    return hist_pts, hist_why
+
+
+def history_ready(lat, lon):
+    return f"{round(lat, 3)},{round(lon, 3)}" in CACHE["history"]
+
+
 def make_report(lat, lon, label, a, people, name, phone, sample=False, hist_at=None):
     hist = history_near(lat, lon)
     verdict, vtext = None, ""
@@ -643,23 +664,26 @@ def make_report(lat, lon, label, a, people, name, phone, sample=False, hist_at=N
             verdict, vtext = photo_verdict(hist["id"])
         except Exception:
             verdict, vtext = None, ""
-    try:
-        fh = flood_history(*(hist_at or (lat, lon)))
-    except Exception:
-        fh = None
-    hist_pts, hist_why = history_points(fh) if fh else (0, None)
-    try:
-        g = live_gauges(*(hist_at or (lat, lon)))
-    except Exception:
-        g = []
-    flooding = [x for x in g if x["category"] in ("minor", "moderate", "major")]
-    if flooding:
-        hist_pts += {"minor": 2, "moderate": 3, "major": 4}[flooding[0]["category"]]
-        hist_why = (hist_why + "; " if hist_why else "") + f"Live river gauge in {flooding[0]['category']} flood (NOAA)"
+    hl, ho = hist_at or (lat, lon)
+    pending = not sample and not history_ready(hl, ho)
+    hist_pts, hist_why = (0, None) if pending else history_parts(hl, ho)
     pts, level, why = score(a, people, hist_pts, hist_why, verdict)
     return {"time": datetime.now().strftime("%H:%M"), "lat": lat, "lon": lon, "label": label, "answers": a, "people": people,
             "name": name, "phone": phone, "score": pts, "level": level, "why": why, "history": hist,
-            "verdict": verdict, "verdict_text": vtext, "hist_pts": hist_pts, "status": "New", "sample": sample}
+            "verdict": verdict, "verdict_text": vtext, "hist_pts": hist_pts, "history_pending": pending, "status": "New", "sample": sample}
+
+
+def rescore_later(rid, lat, lon):
+    def run():
+        hist_pts, hist_why = history_parts(lat, lon)
+        with LOCK:
+            rows = read_requests()
+            for r in rows:
+                if r["id"] == rid:
+                    r["score"], r["level"], r["why"] = score(r["answers"], r["people"], hist_pts, hist_why, r.get("verdict"))
+                    r["hist_pts"], r["history_pending"] = hist_pts, False
+            write_requests(rows)
+    _t.Thread(target=run, daemon=True).start()
 
 
 def write_reply(r, case_id, updated):
@@ -694,6 +718,8 @@ async def api_request(request: Request):
     with LOCK:
         r = save_request(r, lat, lon)
     dup = r.pop("_dup")
+    if r.get("history_pending"):
+        rescore_later(r["id"], lat, lon)
     pos = [x["id"] for x in read_requests() if x["status"] != "Resolved"].index(r["id"]) + 1
     reply = await run_in_threadpool(write_reply, r, r["id"], bool(dup))
     return JSONResponse({"id": r["id"], "updated": bool(dup), "level": r["level"], "position": pos, "reply": reply})

@@ -511,7 +511,7 @@ function selectReq(id, fly) {
       <div class="sec" style="border-top:0;padding-top:0">Situation</div>
       <div class="answers">${ans}</div>
       <div class="sec">Why it's ranked here</div>
-      <ul class="reasons">${r.why.map(w => `<li>${esc(w)}</li>`).join('') || '<li>No urgent answers</li>'}</ul>
+      <ul class="reasons">${r.why.map(w => `<li>${esc(w)}</li>`).join('') || '<li>No urgent answers</li>'}${r.history_pending ? '<li class="muted">Flood history is still loading and will be added to the ranking in a few seconds.</li>' : ''}</ul>
       <div class="sec">Flood history for this area</div>
       <div id="hist"><p class="muted">Loading FEMA and NOAA records for this area…</p></div>
     </div><div>
