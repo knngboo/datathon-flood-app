@@ -595,7 +595,9 @@ function live(f) {
 
 $('#samplebtn').onclick = async () => { if (!confirm('Clear every request and load the 6 demo requests again?')) return; $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
 $('#briefbtn').onclick = async () => { $('#brief').hidden = false; $('#briefout').textContent = 'Reading the open requests… about 10 seconds.'; $('#briefbtn').disabled = true;
-  try { $('#briefout').textContent = (await post('/api/requests/briefing')).answer; } catch (e) { $('#briefout').textContent = e.message; } $('#briefbtn').disabled = false; };
+  try { const r = await post('/api/requests/briefing'); $('#briefout').textContent = r.answer;
+    const pill = $('#brief .aipill'); pill.textContent = r.ai ? 'AI-generated' : 'Plain ranked list'; pill.style.cssText = r.ai ? '' : 'background:#F1F2F4;color:#4B5563';
+  } catch (e) { $('#briefout').textContent = e.message; } $('#briefbtn').disabled = false; };
 
 function toast(msg) {
   let t = document.getElementById('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }

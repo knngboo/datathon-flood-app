@@ -195,7 +195,7 @@ async def api_ask(request: Request):
         answer = await run_in_threadpool(ask_ai, msgs)
     except Exception as e:
         return JSONResponse({"error": f"The AI didn't answer ({e}). Try again."}, status_code=502)
-    return JSONResponse({"answer": answer})
+    return JSONResponse({"answer": answer, "ai": ai})
 
 
 import re
@@ -387,7 +387,7 @@ async def api_dispatch(request):
             {"role": "user", "content": table}], 350)
     except Exception as e:
         return JSONResponse({"error": f"The AI didn't answer ({e})."}, status_code=502)
-    return JSONResponse({"answer": answer})
+    return JSONResponse({"answer": answer, "ai": ai})
 
 
 REQUESTS = Path(os.environ.get("REQUESTS", HERE / "requests.jsonl"))
@@ -974,7 +974,8 @@ async def api_briefing(request):
             groups.append(", ".join(x["id"] for x in g))
     if groups:
         table += "\n\nHotspots (requests within 1.5 km of each other, one crew can reach them together): " + "; ".join(groups)
-    system = ("You brief flood rescue crews. Plain words, under 80 words, no headings. Name at most the top 4 requests to reach first, by request ID, with a few words on why. "
+    system = ("You brief flood rescue crews. Plain words, under 80 words, no headings. The list is already in priority order. "
+              "Go down it in exactly that order and explain the first 4 requests, by request ID, with a few words on why each. "
               "Always put every Critical request before any High, and High before Medium. If a hotspot contains urgent requests, say one crew can cover it together. "
               "For each request, use only the reasons written next to it, in the same words. Never add a condition that is not listed for that request: "
               "for example, never call someone trapped or injured unless 'Trapped' or 'Someone injured' is in their reasons.")
@@ -987,9 +988,10 @@ async def api_briefing(request):
         if briefing_ok(text, rows):
             answer = text
             break
-    if answer is None:
+    ai = answer is not None
+    if not ai:
         answer = plain_briefing(rows, groups)
-    return JSONResponse({"answer": answer})
+    return JSONResponse({"answer": answer, "ai": ai})
 
 
 # ================= neighborhood app =================
