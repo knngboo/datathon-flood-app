@@ -42,14 +42,14 @@ Qwen3-VL-8B-Instruct, a model that reads photos and text, runs on the Dell Pro M
 
 ## Run it
 
-On the GB10, with the model served at `http://localhost:8000/v1` and the photos in `~/Texas_Flood_Student_Data`:
+On the GB10, with the model served at `http://localhost:8000/v1` (shared, for notebooks) and, ideally, a second copy for the app at `http://localhost:8001/v1` (the app uses 8001 and falls back to 8000), and the photos in `~/Texas_Flood_Student_Data`:
 
 ```
 python3 -m venv .venv && .venv/bin/pip install starlette uvicorn pandas pillow
 .venv/bin/uvicorn server:app --host 0.0.0.0 --port 8501
 ```
 
-Settings: `VLM_BASE_URL`, `VLM_MODEL`, `DATA_DIR`. The app is `server.py` (Python, Starlette) and `static/index.html` (one page, Leaflet maps). Requests are saved one per line in `requests.jsonl`. There is no database; a one-day prototype doesn't need one.
+Settings: `VLM_BASE_URL`, `VLM_MODEL`, `DATA_DIR`. The app makes one AI call at a time and lets a resident's reply go ahead of background work, because this model doesn't support batching. The app is `server.py` (Python, Starlette) and `static/index.html` (one page, Leaflet maps). Requests are saved one per line in `requests.jsonl`. There is no database; a one-day prototype doesn't need one.
 
 ## Limits
 
