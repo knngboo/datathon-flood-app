@@ -325,7 +325,28 @@ async def api_suggest(request):
 
 
 @lru_cache(maxsize=512)
+def photon_reverse(lat, lon):
+    """Backup for street names, county and ZIP when OpenStreetMap's Nominatim is busy or rate-limiting us."""
+    url = "https://photon.komoot.io/reverse?" + urllib.parse.urlencode({"lat": lat, "lon": lon, "lang": "en"})
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.3"}), timeout=8) as r:
+        feats = json.loads(r.read()).get("features", [])
+    p = feats[0]["properties"] if feats else {}
+    return {"road": p.get("street") or p.get("name", ""), "house_number": p.get("housenumber", ""), "city": p.get("city", ""),
+            "county": p.get("county", ""), "postcode": p.get("postcode", ""), "state": p.get("state", "")}
+
+
 def reverse(lat, lon):
+    try:
+        return _reverse(lat, lon)
+    except Exception:
+        a = photon_reverse(lat, lon)
+        line1 = " ".join(x for x in [a["house_number"], a["road"]] if x).strip()
+        line2 = ", ".join(x for x in [a["city"] or a["county"], "TX", tx_zip(a["postcode"])] if x)
+        return f"Near {line1}, {line2}" if line1 else f"Near {line2}"
+
+
+@lru_cache(maxsize=512)
+def _reverse(lat, lon):
     url = "https://nominatim.openstreetmap.org/reverse?" + urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "json", "zoom": 17, "addressdetails": 1})
     req = urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.2 (UTSA datathon demo)"})
     with urllib.request.urlopen(req, timeout=10) as r:
@@ -452,8 +473,16 @@ def tx_zip(z):
     return z if len(z) == 5 and z.isdigit() and (z.startswith("7") or z.startswith("885")) else ""
 
 
-@lru_cache(maxsize=256)
 def where_is(lat, lon):
+    try:
+        return _where_is(lat, lon)
+    except Exception:
+        a = photon_reverse(lat, lon)
+        return (a["county"] or "").replace(" County", ""), tx_zip(a["postcode"]), a["state"]
+
+
+@lru_cache(maxsize=256)
+def _where_is(lat, lon):
     url = "https://nominatim.openstreetmap.org/reverse?" + urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "json", "zoom": 16, "addressdetails": 1})
     req = urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.3 (UTSA datathon demo)"})
     with urllib.request.urlopen(req, timeout=8) as r:
