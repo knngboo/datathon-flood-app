@@ -36,6 +36,12 @@
   .progress div { height: 100%; background: var(--ink); width: 0; transition: width .25s; }
   .stepcount { font-size: .9rem; color: var(--muted); margin-bottom: 20px; display: flex; justify-content: space-between; }
   .stepcount button { font: inherit; background: none; border: 0; color: var(--ink); font-weight: 700; cursor: pointer; padding: 0; text-decoration: underline; }
+  .intro { margin: 0 0 26px; }
+  .intro h1 { font-size: 2rem; line-height: 1.15; color: var(--ink); margin: 0 0 8px; font-weight: 800; letter-spacing: -0.015em; }
+  .intro p { font-size: 1.08rem; color: var(--muted); margin: 0 0 16px; line-height: 1.5; }
+  .isteps { display: flex; gap: 8px; flex-wrap: wrap; }
+  .isteps span { display: inline-flex; align-items: center; gap: 8px; background: var(--wash); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px 6px 6px; font-weight: 600; color: var(--ink); font-size: .92rem; }
+  .isteps b { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: #fff; font-size: .8rem; }
   .q { font-size: 1.55rem; line-height: 1.25; font-weight: 800; color: var(--ink); margin: 0 0 8px; }
   .hint { color: var(--muted); margin: 0 0 20px; line-height: 1.5; }
   .choices { display: grid; gap: 12px; }
@@ -170,7 +176,11 @@
     .ops { height: auto; }
     .ops { grid-template-columns: 1fr; height: auto; } .side { grid-template-rows: 320px auto; } .queue { max-height: 60vh; }
     .dgrid, .limits { grid-template-columns: 1fr; }
+    .wizard { padding-top: 16px; }
+    .intro { margin-bottom: 18px; } .intro h1 { font-size: 1.5rem; } .intro p { font-size: .98rem; margin-bottom: 10px; }
+    .isteps { flex-wrap: nowrap; gap: 5px; } .isteps span { font-size: .76rem; padding: 3px 8px 3px 3px; gap: 5px; white-space: nowrap; } .isteps b { width: 18px; height: 18px; font-size: .7rem; }
   }
+  @media (max-width: 380px) { .isteps { flex-wrap: wrap; } .intro p { display: none; } .intro h1 { font-size: 1.35rem; } }
 </style>
 </head>
 <body>
@@ -349,7 +359,7 @@ function renderStep(fromHistory) {
   if (!history.state || typeof history.state.step !== 'number') history.replaceState({ step: S.step }, '', location.hash || '#help');
   lastStep = S.step;
   $('#prog').style.width = (S.done ? 100 : (S.step / TOTAL) * 100) + '%';
-  $('#stepno').textContent = S.done ? '' : S.step === 0 ? 'First, your location' : S.step <= QUESTIONS.length ? `Question ${S.step} of ${QUESTIONS.length}` : S.step === QUESTIONS.length + 1 ? 'Almost done' : 'Last step: review';
+  $('#stepno').textContent = S.done ? '' : S.step === 0 ? '' : S.step <= QUESTIONS.length ? `Question ${S.step} of ${QUESTIONS.length}` : S.step === QUESTIONS.length + 1 ? 'Almost done' : 'Last step: review';
   $('#back').style.visibility = S.step > 0 && !S.done ? 'visible' : 'hidden';
   const box = $('#step');
   if (S.done) { window.scrollTo(0, 0); return renderDone(box); }
@@ -371,7 +381,10 @@ function renderStep(fromHistory) {
 $('#back').onclick = () => { if (S.step > 0) { S.step--; if (S.step === 2 && S.answers.water_inside === 'no') S.step = 1; renderStep(); } };
 
 function renderWhere(box) {
-  box.innerHTML = `<h1 class="q">Where are you?</h1>
+  box.innerHTML = `<div class="intro"><h1>Need help in a flood?</h1>
+      <p>Tell us where you are and answer 6 quick questions. Responders see your request right away, ranked by urgency.</p>
+      <div class="isteps"><span><b>1</b>Your location</span><span><b>2</b>6 questions</span><span><b>3</b>Responders see it</span></div></div>
+    <h2 class="q" style="font-size:1.3rem">Where are you?</h2>
     <p class="hint">Start typing your street address, then pick it from the list.</p>
     <div id="chosen" class="chosen" hidden><div class="top"><span>Responders will see this location<br><b id="chosenlabel"></b></span><button type="button" id="change">Change</button></div><div id="pinmap"></div></div>
     <div id="finder">
