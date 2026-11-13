@@ -66,6 +66,7 @@ def places():
             "county": r["county_name"] if isinstance(r["county_name"], str) else "",
             "event": "harvey" if "Harvey" in str(r["event_name"]) else "hill",
             "event_name": r["event_name"], "date": r["acquisition_date"], "source": r["source_agency"],
+            "bounds": [float(r[k]) for k in ("west", "south", "east", "north")] if all(not pd.isna(r.get(k)) for k in ("west", "south", "east", "north")) else None,
             "before_date": before_date, "before_source": before_src,
             "facts": [
                 ["Rain in the week before the photo", num(r.get("preceding_7d_precipitation_mm"), "{:,.0f} mm")],
