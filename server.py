@@ -937,7 +937,16 @@ def briefing_ok(text, rows):
         for word, reason in CLAIMS.items():
             if word in seg and current[0] in by_id and reason.lower() not in by_id[current[0]]:
                 return False
-    return True
+    # order: no request may be mentioned before (or instead of) an open request with a higher priority
+    rank = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+    level = {r["id"]: rank.get(r["level"], 9) for r in rows if r["status"] != "Resolved"}
+    seen = list(dict.fromkeys(i for i in re.findall(r"R\d{3}", text) if i in level))
+    if not seen:
+        return False
+    worst = max(level[i] for i in seen)
+    if any(lv < worst and i not in seen for i, lv in level.items()):
+        return False
+    return [level[i] for i in seen] == sorted(level[i] for i in seen) or bool(re.search(r"one crew", text, re.I))
 
 
 def plain_briefing(rows, groups):
