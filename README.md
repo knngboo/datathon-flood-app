@@ -14,11 +14,18 @@ Triage analysis in a timely manner, for flood assistance. Residents submit a rep
 
 ## Ranking
 
-Plain points, visible to anyone: in immediate danger 40, trapped 30, someone injured 25, water rising 15, can't leave safely 15, someone elderly or disabled 10 (half for "not sure"), 2 per extra person up to 4. Flood history adds at most 8 points, so it never outranks someone in danger right now. A NOAA river gauge in flood nearby adds 2 to 4. Critical: in immediate danger, trapped with water rising, or 65 points and up.
+Plain points, visible to anyone: in immediate danger 40, trapped 30, someone injured 25, water rising 15, can't leave safely 15, someone elderly or disabled 10 (half for "not sure"), 2 per extra person up to 4. Flood history adds at most 8 points, so it never outranks someone in danger right now. A NOAA river gauge in flood nearby adds 2 to 4 (or 2 if a USGS gauge rose 1 ft in 3 hours). Critical: in immediate danger, trapped with water rising, or 65 points and up.
 
 ## Where the AI is used
 
 Qwen3-VL-8B-Instruct, a model that reads photos and text, runs on the Dell Pro Max GB10 at our table. It writes each resident's reply, reads the aerial photo of the area for floodwater, summarizes decades of FEMA records into a two-sentence historical insight, and turns the open requests and hotspots into a "who to reach first" plan. Every AI-written part has an AI tag on screen.
+
+## How we keep the AI honest
+
+- "Call 911 now" for anyone in immediate danger, or trapped with water rising, is fixed text, never AI.
+- The historical insight is checked before it's shown: numbers that aren't in FEMA's records are replaced with the real figures.
+- "Who to reach first" is checked against each person's own answers and the priority order; if it fails, a plain ranked list is shown, labeled as not AI.
+- If the AI is down, requests are still saved and ranked, and people get a fixed safety message.
 
 ## Data
 
@@ -27,7 +34,7 @@ Qwen3-VL-8B-Instruct, a model that reads photos and text, runs on the Dell Pro M
 | Flood-related disasters by county | FEMA disaster declarations (OpenFEMA) |
 | Households that applied for help, by ZIP code | FEMA housing assistance records (OpenFEMA) |
 | Flood zone at a spot | FEMA National Flood Hazard Layer |
-| River levels right now | NOAA National Water Prediction Service |
+| River levels right now | NOAA National Water Prediction Service, or USGS Water Services when NOAA is busy |
 | Aerial photos after past floods | NOAA emergency response imagery (Harvey 2017, Hill Country 2025) |
 | Aerial photos before Harvey | USDA National Agriculture Imagery Program (2016) |
 | Photo collection for this event | Hugging Face dataset jennifer-fowler/UTSA-flood-images |

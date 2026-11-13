@@ -233,6 +233,14 @@
       <tr><td>"Who to reach first"</td><td>Turns the open requests and hotspots into a short plan for the crew lead.</td></tr>
     </table>
     <p class="muted" style="margin-top:10px">The AI model (Qwen3-VL-8B) runs on the Dell Pro Max GB10 at our table. The ranking itself is plain, visible math below, so anyone can check it.</p>
+    <h2>How we keep the AI honest</h2>
+    <table>
+      <tr><th>Risk</th><th>What the app does</th></tr>
+      <tr><td>The AI gets a life-safety instruction wrong</td><td>"Call 911 now" for anyone in immediate danger, or trapped with water rising, is fixed text. It never depends on the AI.</td></tr>
+      <tr><td>The AI makes up a number</td><td>The historical insight is checked before it's shown: any number that isn't in FEMA's records is replaced with the real figures.</td></tr>
+      <tr><td>The AI misdescribes someone or skips an urgent request</td><td>"Who to reach first" is checked against each person's own answers and the priority order. If it fails, the app shows a plain ranked list instead, labeled as not AI.</td></tr>
+      <tr><td>The AI is down</td><td>Requests are still saved, ranked and shown to responders. People get a fixed safety message instead of an AI reply.</td></tr>
+    </table>
     <h2>How a request is ranked</h2>
     <table>
       <tr><th>What the person tells us</th><th>Yes</th><th>Not sure</th></tr>
