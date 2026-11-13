@@ -494,7 +494,7 @@ def history_points(h):
     pts = 3 if h["last10"] >= 5 else 2 if h["last10"] >= 2 else 1
     worst = max((x["households"] for x in h["severity"]), default=0)
     pts += 3 if worst >= 1000 else 1 if worst >= 100 else 0
-    return pts, f"Flood-prone area: {h['last10']} flood disasters in {h['county']} County in 10 years"
+    return pts, f"Flood-prone area: {h['last10']} recorded flood events in {h['county']} County in the last 10 years"
 
 
 @lru_cache(maxsize=512)
@@ -512,28 +512,34 @@ def flood_zone(lat, lon):
             "label": "High-risk flood zone (1% chance of flooding every year)" if high else "Outside FEMA's high-risk flood zone"}
 
 
-GAUGES = {}
+GAUGES = {"t": 0, "all": []}  # NOAA allows 10 requests per 5 minutes, so fetch one big area at most every 5 minutes
 
 
-def live_gauges(lat, lon):
+def all_gauges():
     import time
-    key = f"{round(lat, 2)},{round(lon, 2)}"
-    if key in GAUGES and time.time() - GAUGES[key][0] < 300:
-        return GAUGES[key][1]
+    if time.time() - GAUGES["t"] < 300 and GAUGES["all"]:
+        return GAUGES["all"]
     url = ("https://api.water.noaa.gov/nwps/v1/gauges?" + urllib.parse.urlencode({
-        "bbox.xmin": lon - .15, "bbox.ymin": lat - .15, "bbox.xmax": lon + .15, "bbox.ymax": lat + .15, "srid": "EPSG_4326"}))
-    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.3"}), timeout=12) as r:
-        gs = json.loads(r.read()).get("gauges", [])
+        "bbox.xmin": -100.6, "bbox.ymin": 28.4, "bbox.xmax": -93.4, "bbox.ymax": 31.6, "srid": "EPSG_4326"}))
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "TexasFloodCheck/0.3"}), timeout=20) as r:
+            gs = json.loads(r.read()).get("gauges", [])
+    except Exception:
+        GAUGES["t"] = time.time()  # back off for 5 minutes instead of hammering a rate-limited service
+        return GAUGES["all"]
     out = []
     for g in gs:
         obs = (g.get("status") or {}).get("observed") or {}
-        if g.get("latitude") is None:
-            continue
-        out.append({"name": g.get("name"), "id": g.get("lid"), "km": round(km(lat, lon, g["latitude"], g["longitude"]), 1),
-                    "category": obs.get("floodCategory") or "unknown", "stage": obs.get("primary"), "unit": obs.get("primaryUnit") or "ft"})
-    out = sorted(out, key=lambda x: x["km"])[:3]
-    GAUGES[key] = (time.time(), out)
-    return out
+        if g.get("latitude") is not None:
+            out.append({"name": g.get("name"), "id": g.get("lid"), "lat": g["latitude"], "lon": g["longitude"],
+                        "category": obs.get("floodCategory") or "unknown", "stage": obs.get("primary"), "unit": obs.get("primaryUnit") or "ft"})
+    GAUGES.update(t=time.time(), all=out or GAUGES["all"])
+    return GAUGES["all"]
+
+
+def live_gauges(lat, lon):
+    near = [{**g, "km": round(km(lat, lon, g["lat"], g["lon"]), 1)} for g in all_gauges()]
+    return sorted([g for g in near if g["km"] <= 20], key=lambda x: x["km"])[:3]
 
 
 HISTORY_SUMMARY = {tuple(k.split("|")): v for k, v in CACHE.get("summaries", {}).items()}
@@ -557,13 +563,12 @@ async def api_history(request):
         h["gauges"] = []
     key = (h["county"], h["zip"])
     if key not in HISTORY_SUMMARY:
-        facts = (f"{h['county']} County, Texas: {h['total']} federal flood-related disasters since {h.get('since')} "
+        facts = (f"{h['county']} County, Texas: {h['total']} recorded flood events since {h.get('since')} "
                  f"({h['classes']['Minor']} minor, {h['classes']['Moderate']} moderate, {h['classes']['Major']} major, {h['classes']['Severe']} severe), "
-                 f"{h.get('last10')} in the last 10 years, most recent {h.get('last_year')}. Households in ZIP {h['zip']} that asked FEMA for help: "
-                 + ("; ".join(f"{x['title']} {x['year']}: {x['households']:,}" for x in h["severity"]) or "no records") + ".")
+                 f"{h.get('last10')} of them in the last 10 years, most recent in {h.get('last_year')}.")
         try:
             HISTORY_SUMMARY[key] = await run_in_threadpool(ask_ai, [
-                {"role": "system", "content": "You brief flood rescue crews. Exactly two short plain sentences, under 45 words total. First: how often and how badly this area has flooded. Second: what that history suggests for a rescue happening now (for example deep water, flooded streets, many people needing help at once). Never tell responders to prioritize people because they applied to FEMA in the past. Use only the numbers given. The household numbers are households that asked FEMA for help: say exactly that, never 'displaced', 'affected' or 'damaged'."},
+                {"role": "system", "content": "You brief flood rescue crews. Exactly two short plain sentences, under 45 words total. First: how often and how badly this area has flooded (use the words 'flood events'). Second: what rescuers should expect on the ground now (for example deep water, blocked streets, many calls at once). Do not mention FEMA or applications in the second sentence. Never tell responders to prioritize people because they applied to FEMA in the past. Use only the numbers given. The household numbers are households that asked FEMA for help: say exactly that, never 'displaced', 'affected' or 'damaged'."},
                 {"role": "user", "content": facts}], 120)
         except Exception:
             HISTORY_SUMMARY[key] = ""
@@ -611,11 +616,11 @@ def score(a, people, hist_pts, hist_why, verdict):
         if a.get(k) == "yes":
             pts += yes; why.append(label)
         elif a.get(k) == "unsure":
-            pts += unsure; why.append(label + " (not sure)")
+            pts += unsure; why.append("Not sure: " + label[0].lower() + label[1:])
     if a.get("evacuate") == "no":
         pts += 15; why.append("Can't leave safely")
     elif a.get("evacuate") == "unsure":
-        pts += 8; why.append("Not sure they can leave safely")
+        pts += 8; why.append("Not sure: can leave safely")
     pts += min(max(people - 1, 0), 4) * 2
     if hist_pts:
         pts += hist_pts; why.append(hist_why)

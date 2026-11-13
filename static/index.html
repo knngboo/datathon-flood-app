@@ -74,6 +74,9 @@
   .hhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .hhead b { font-size: 1.05rem; color: var(--text); }
   .aipill { font-size: .78rem; font-weight: 700; color: #3B5BDB; background: #E7EEFF; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .aiblock { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: #FBFBFC; margin: 12px 0; }
+  .aiblock .hhead { margin-bottom: 8px; }
+  .aiblock p { margin: 0; line-height: 1.6; }
   .hsub { font-size: .82rem; color: var(--muted); margin: 4px 0 12px; }
   .htiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .htile { background: #F1F2F4; border-radius: 10px; padding: 14px 14px 12px; }
@@ -90,7 +93,6 @@
   .hins { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
   .hins b { color: #111827; }
   .hins p { line-height: 1.6; margin: 6px 0 0; }
-  .ai { display: inline-block; background: #6D28D9; color: #fff; font-size: .72rem; font-weight: 800; letter-spacing: .02em; padding: 2px 7px; border-radius: 5px; margin-right: 6px; vertical-align: 1px; }
   .bubble-ai { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 14px 0 4px; }
 
   /* responders */
@@ -181,8 +183,8 @@
     <div class="queue">
       <div class="queuehead">
         <div class="counts" id="counts"></div>
-        <div class="qbtns"><button class="btn" id="briefbtn"><span class="ai" style="background:#fff;color:#6D28D9">AI</span>Who to reach first</button><button class="btn ghost" id="samplebtn" hidden>Reset demo</button></div>
-        <div class="why" id="brief" hidden></div>
+        <div class="qbtns"><button class="btn" id="briefbtn">Who to reach first</button><button class="btn ghost" id="samplebtn" hidden>Reset demo</button></div>
+        <div class="aiblock" id="brief" hidden><div class="hhead"><b>Who to reach first</b><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span></div><p id="briefout"></p></div>
       </div>
       <div id="cards"></div>
     </div>
@@ -211,11 +213,11 @@
 <section class="view" id="view-about">
   <div class="doc">
     <h1>How Texas Flood Check works</h1>
-    <p>Triage analysis in a timely manner, for flood assistance. Residents submit a report with their information. The AI analyzes it and identifies how urgent it is. Each request is pushed to first responders and ranked by triage status. This improves access to assistance, reduces the load on responders, and keeps people accountable.</p>
+    <p>Triage analysis in a timely manner, for flood assistance. Residents submit a request with their information. The AI analyzes it and identifies how urgent it is. Each request is pushed to first responders and ranked by triage status. This improves access to assistance, reduces the load on responders, and keeps people accountable.</p>
     <p class="muted">An area's flood history counts, but it never outranks someone who says they're in danger right now.</p>
     <h2>Where the AI is used</h2>
     <table>
-      <tr><th>What (look for the <span class="ai">AI</span> tag on screen)</th><th>Why it needs AI</th></tr>
+      <tr><th>What (look for the <span class="aipill" title="Written by the AI model on our Dell">AI-generated</span> label on screen)</th><th>Why it needs AI</th></tr>
       <tr><td>A calm reply telling each person what to do while they wait</td><td>Every situation is different; the reply is written from their own answers.</td></tr>
       <tr><td>Reading the aerial photo of the area from a past flood</td><td>Only a vision model can tell whether a photo shows floodwater over streets and homes.</td></tr>
       <tr><td>The historical flood insight</td><td>Turns decades of FEMA records into two sentences a responder can read in seconds.</td></tr>
@@ -232,7 +234,7 @@
       <tr><td>Can't leave safely (answered No)</td><td>15</td><td>8</td></tr>
       <tr><td>Someone elderly or disabled</td><td>10</td><td>5</td></tr>
       <tr><td>Each extra person, up to 4</td><td colspan="2">2 each</td></tr>
-      <tr><td>Flood history: FEMA flood disasters in the county in the last 10 years (5+: 3, 2 to 4: 2, otherwise 1)</td><td colspan="2">up to 3</td></tr>
+      <tr><td>Flood history: recorded flood events in the county in the last 10 years (5+: 3, 2 to 4: 2, otherwise 1)</td><td colspan="2">up to 3</td></tr>
       <tr><td>Flood history: households in this ZIP that applied to FEMA in a past flood (1,000+: 3, 100+: 1)</td><td colspan="2">up to 3</td></tr>
       <tr><td>Aerial photo shows the area flooded before</td><td colspan="2">2</td></tr>
       <tr><td>A NOAA river gauge nearby is in flood right now (minor / moderate / major)</td><td colspan="2">2 / 3 / 4</td></tr>
@@ -243,7 +245,7 @@
     <h2>Where the data comes from</h2>
     <table>
       <tr><th>Data</th><th>Source</th></tr>
-      <tr><td>Flood disasters by county since 1953</td><td>FEMA disaster declarations (OpenFEMA)</td></tr>
+      <tr><td>Recorded flood events by county</td><td>FEMA disaster declarations since 1953 (OpenFEMA)</td></tr>
       <tr><td>Households that applied for help, by ZIP code</td><td>FEMA housing assistance records (OpenFEMA)</td></tr>
       <tr><td>Flood zone at the exact spot</td><td>FEMA National Flood Hazard Layer (the data behind FEMA's Flood Map Service Center)</td></tr>
       <tr><td>River levels right now</td><td>NOAA National Water Prediction Service (live gauges)</td></tr>
@@ -311,7 +313,7 @@ let pinmap, pickmap, pin;
 
 function renderStep() {
   $('#prog').style.width = (S.done ? 100 : (S.step / TOTAL) * 100) + '%';
-  $('#stepno').textContent = S.done ? 'Request sent' : S.step === 0 ? 'First, your location' : S.step <= QUESTIONS.length ? `Question ${S.step} of ${QUESTIONS.length}` : S.step === QUESTIONS.length + 1 ? 'Almost done' : 'Last step: review';
+  $('#stepno').textContent = S.done ? '' : S.step === 0 ? 'First, your location' : S.step <= QUESTIONS.length ? `Question ${S.step} of ${QUESTIONS.length}` : S.step === QUESTIONS.length + 1 ? 'Almost done' : 'Last step: review';
   $('#back').style.visibility = S.step > 0 && !S.done ? 'visible' : 'hidden';
   const box = $('#step');
   if (S.done) { window.scrollTo(0, 0); return renderDone(box); }
@@ -437,7 +439,7 @@ function renderDone(box) {
       <h2>${d.updated ? 'Request updated' : 'Help request sent'}: case ${d.id}</h2>
       ${d.updated ? '<p class="muted">You already asked for help from this spot, so we updated that request instead of making a new one.</p>' : ''}
       ${S.answers.danger === 'yes' || (S.answers.trapped === 'yes' && S.answers.rising === 'yes') ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--critical);color:#fff;border-radius:10px;padding:14px 16px;margin:12px 0 4px"><b style="font-size:1.05rem">${S.answers.danger === 'yes' ? "You said you're in immediate danger." : "You're trapped and the water is rising."} Call 911 now.</b><a href="tel:911" style="background:#fff;color:var(--critical);font-weight:800;padding:8px 16px;border-radius:8px;text-decoration:none">Call 911</a></div>` : ''}
-      <div class="bubble-ai"><p><span class="ai" title="Written by the AI model on our Dell">AI</span>${esc(d.reply)}</p><p class="muted" style="font-size:.82rem;margin-top:6px">Written by our AI from your answers.</p></div>
+      <div class="aiblock"><div class="hhead"><b>What to do now</b><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span></div><p>${esc(d.reply)}</p></div>
       <p style="margin-top:12px">Responders see your request as <b style="color:${c}">${d.level}</b> priority, number <b>${d.position}</b> on their list. If anything gets worse, send a new request or call 911.</p>
     </div>
     <p style="margin-top:18px"><button class="btn ghost" id="again">Send a new request</button></p>`;
@@ -508,14 +510,15 @@ function selectReq(id, fly, keepView) {
   const ans = QUESTIONS.map(([k, q]) => `<span>${esc(q)}</span><b class="${badAns(k, r.answers[k])}">${esc(LABEL[k][r.answers[k]] || '—')}</b>`).join('');
   const h = r.history, p = PLACES && PLACES.find(x => x.id === h.id), near = p && h.km <= 3;
   const yr = d => esc(String(d).slice(0, 4));
-  const v = r.verdict === 'Yes' ? ['Flooded then', LVL.Critical] : r.verdict === 'No' ? ['No flooding seen', LVL.Low] : r.verdict ? ['Unclear', LVL.Medium] : null;
+  const pyr = p ? String(p.date).slice(0, 4) : '';
+  const v = r.verdict === 'Yes' ? [`Flooding seen in ${pyr}`, LVL.Critical] : r.verdict === 'No' ? [`No flooding seen in ${pyr}`, LVL.Low] : r.verdict ? ['Unclear', LVL.Medium] : null;
   const bx = near && p.bounds ? [(r.lon - p.bounds[0]) / (p.bounds[2] - p.bounds[0]), (p.bounds[3] - r.lat) / (p.bounds[3] - p.bounds[1])] : null;
   const inPhoto = bx && bx[0] >= 0 && bx[0] <= 1 && bx[1] >= 0 && bx[1] <= 1;
   const pin = inPhoto ? `<div title="This request" style="position:absolute;left:${bx[0] * 100}%;top:${bx[1] * 100}%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#B91C1C;border:3px solid #fff;box-shadow:0 0 0 2px #B91C1C;z-index:3;pointer-events:none"></div>` : '';
   const photo = near ? (p.before
       ? `<div class="compare" id="cmp"><img src="/img/${p.id}?w=520" alt="After the flood"><img class="before" src="/img/${p.before}?w=520" alt="Before the flood" style="clip-path:inset(0 50% 0 0)"><div class="bar"></div>${pin}<input type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after"></div><div class="caps"><span>Before, ${yr(p.before_date)} (USDA)</span><span>Drag to compare</span><span>After, ${yr(p.date)} (NOAA)</span></div>`
       : `<div class="compare"><img src="/img/${p.id}?w=520" alt="After the flood">${pin}</div><div class="caps"><span>After, ${yr(p.date)} (NOAA)</span></div>`)
-      + (v ? `<div class="why"><span class="ai" title="The AI model looked at this photo">AI</span><span class="status" style="background:${v[1]}">Photo check: ${v[0]}</span> ${esc(r.verdict_text)}</div>` : '')
+      + (v ? `<div class="aiblock"><div class="hhead"><b>Photo check</b><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span></div><p><span class="status" style="background:${v[1]}">${v[0]}</span> ${esc(r.verdict_text)}</p></div>` : '')
     : `<p class="muted">No aerial photo from a past flood within 3 km of this request. We only have aerial photos of 13 neighborhoods (${esc(h.place)} is the closest, ${Math.round(h.km)} km away).</p>`;
   const actions = [['On the way', 'Mark on the way'], ['Resolved', 'Mark resolved'], ['New', 'Reopen']].filter(([s]) => s !== r.status && !(s === 'New' && r.status === 'New'))
     .map(([s, l], i) => `<button class="btn ${i ? 'ghost' : ''}" data-s="${s}">${l}</button>`).join('');
@@ -551,30 +554,30 @@ function histReport(f) {
   const rows = ['Minor', 'Moderate', 'Major', 'Severe'].map(k => `<div class="srow"><div class="top"><b style="font-weight:600">${k}</b><span>${C[k] || 0} event${C[k] === 1 ? '' : 's'}</span></div><div class="track"><div style="width:${(C[k] || 0) / max * 100}%;background:${COL[k]}"></div></div></div>`).join('');
   const list = (f.events || []).map(e => `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.85rem;margin:3px 0"><span>${e.year}, ${esc(e.title.length > 34 ? e.title.slice(0, 32) + '…' : e.title)}</span><span class="muted" style="white-space:nowrap">${e.class}${e.households != null ? `, ${e.households.toLocaleString()} households in ${esc(f.zip)}` : ''}</span></div>`).join('');
   return `<div class="hcard">
-    <div class="hhead"><b>Historical flood analysis</b><span class="aipill">AI-generated insight</span></div>
+    <div class="hhead"><b>Historical flood analysis</b></div>
     <div class="hsub">${esc(f.county)} County, Texas · ZIP ${esc(f.zip || 'unknown')} · FEMA records since ${f.since}</div>
     <div class="htiles">
-      <div class="htile"><div class="n">${f.total}</div><div class="l">Recorded flood events</div><div class="s">FEMA flood-related disasters in ${esc(f.county)} County</div></div>
+      <div class="htile"><div class="n">${f.total}</div><div class="l">Recorded flood events</div><div class="s">FEMA-declared in ${esc(f.county)} County since ${f.since}</div></div>
       <div class="htile"><div class="n">${f.major_count}</div><div class="l">Major flood events</div><div class="s">100+ households in this ZIP applied to FEMA</div></div>
     </div>
     <div class="hsev"><div class="t">Historical flood severity</div>${rows}
       <p class="muted" style="font-size:.78rem;margin:8px 0 0">Minor: FEMA emergency declaration only. Moderate: major disaster declared. Major: 100+ households in this ZIP applied to FEMA for help. Severe: 5,000+ applied.</p>
       <details style="margin-top:8px"><summary style="cursor:pointer;font-size:.85rem;font-weight:600;color:var(--ink)">See every record</summary><div style="margin-top:6px">${list}</div></details>
     </div>
-    ${f.summary ? `<div class="hins"><b>AI historical insight</b><p>${esc(f.summary)}</p></div>` : ''}
+    ${f.summary ? `<div class="hins"><div class="hhead"><b>AI historical insight</b><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span></div><p>${esc(f.summary)}</p></div>` : ''}
   </div>${live(f)}`;
 }
 function live(f) {
   const GC = { no_flooding: ['No flooding', '#15803D'], action: ['Near flood stage', '#A16207'], minor: ['Minor flooding', '#C2410C'], moderate: ['Moderate flooding', '#B91C1C'], major: ['Major flooding', '#7F1D1D'] };
-  const zone = f.zone ? `<div style="margin-top:14px;font-size:.9rem"><b>FEMA flood zone here:</b> ${esc(f.zone.zone)}, ${esc(f.zone.label)}</div>` : '';
+  const zone = f.zone ? `<div style="margin-top:14px"><b style="color:var(--ink)">At this spot</b></div><div style="font-size:.9rem;margin-top:4px">FEMA flood zone ${esc(f.zone.zone)}: ${f.zone.high_risk ? 'high-risk area, a 1% chance of flooding every year' : 'outside the high-risk flood area'}</div>` : '';
   const g = (f.gauges || []).map(x => { const c = GC[x.category] || ['No data', '#6B7280'];
     return `<div style="display:flex;justify-content:space-between;gap:8px;font-size:.85rem;margin:4px 0"><span>${esc(x.name)} <span class="muted">(${x.km} km)</span></span><span class="status" style="background:${c[1]}">${c[0]}${x.stage != null ? ', ' + x.stage + ' ' + esc(x.unit) : ''}</span></div>`; }).join('');
-  return `<div style="margin-top:14px"><b style="color:var(--ink)">Right now</b></div>` + zone + (g ? `<div style="margin-top:8px;font-size:.9rem">Live river gauges nearby (NOAA)</div>${g}` : '') + `<p class="muted" style="font-size:.75rem;margin-top:10px">Sources: FEMA disaster declarations and housing assistance records, FEMA National Flood Hazard Layer, NOAA National Water Prediction Service.</p>`;
+  return zone + (g ? `<div style="margin-top:14px"><b style="color:var(--ink)">Right now: river gauges nearby</b> <span class="muted" style="font-size:.8rem">(NOAA, live)</span></div>${g}` : '') + `<p class="muted" style="font-size:.75rem;margin-top:10px">Sources: FEMA disaster declarations and housing assistance records, FEMA National Flood Hazard Layer, NOAA National Water Prediction Service.</p>`;
 }
 
 $('#samplebtn').onclick = async () => { if (!confirm('Clear every request and load the 6 demo requests again?')) return; $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
-$('#briefbtn').onclick = async () => { const o = $('#brief'); o.hidden = false; o.textContent = 'Reading the open requests… about 10 seconds.'; $('#briefbtn').disabled = true;
-  try { o.innerHTML = '<span class="ai">AI</span>' + esc((await post('/api/requests/briefing')).answer); } catch (e) { o.textContent = e.message; } $('#briefbtn').disabled = false; };
+$('#briefbtn').onclick = async () => { $('#brief').hidden = false; $('#briefout').textContent = 'Reading the open requests… about 10 seconds.'; $('#briefbtn').disabled = true;
+  try { $('#briefout').textContent = (await post('/api/requests/briefing')).answer; } catch (e) { $('#briefout').textContent = e.message; } $('#briefbtn').disabled = false; };
 
 function toast(msg) {
   let t = document.getElementById('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
