@@ -557,7 +557,7 @@ async def api_history(request):
                  + ("; ".join(f"{x['title']} {x['year']}: {x['households']:,}" for x in h["severity"]) or "no records") + ".")
         try:
             HISTORY_SUMMARY[key] = await run_in_threadpool(ask_ai, [
-                {"role": "system", "content": "You brief flood rescue crews. Exactly two short plain sentences, under 45 words total: how often and how badly this area has flooded, and what responders should keep in mind now. Use only the numbers given. The household numbers are households that asked FEMA for help: say exactly that, never 'displaced', 'affected' or 'damaged'."},
+                {"role": "system", "content": "You brief flood rescue crews. Exactly two short plain sentences, under 45 words total. First: how often and how badly this area has flooded. Second: what that history suggests for a rescue happening now (for example deep water, flooded streets, many people needing help at once). Never tell responders to prioritize people because they applied to FEMA in the past. Use only the numbers given. The household numbers are households that asked FEMA for help: say exactly that, never 'displaced', 'affected' or 'damaged'."},
                 {"role": "user", "content": facts}], 120)
         except Exception:
             HISTORY_SUMMARY[key] = ""
