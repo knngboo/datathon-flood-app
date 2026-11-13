@@ -27,7 +27,8 @@ from starlette.staticfiles import StaticFiles
 HERE = Path(__file__).parent
 DATA = Path(os.environ.get("DATA_DIR", Path.home() / "Texas_Flood_Student_Data"))
 HOUSEHOLDS = Path(os.environ.get("SUBMISSIONS", HERE / "households.csv"))
-AI_URL = os.environ.get("VLM_BASE_URL", "http://localhost:8000/v1")
+# The app has its own AI copy on 8001 (teammates' notebooks use 8000); if 8001 is down it falls back to 8000.
+AI_URLS = [u for u in dict.fromkeys([os.environ.get("VLM_BASE_URL", "http://localhost:8001/v1"), "http://localhost:8000/v1"])]
 AI_MODEL = os.environ.get("VLM_MODEL", "/home/dell/models/qwen3-VL-8b-instruct")
 FIELDS = ["time", "name", "phone", "place_id", "place", "lat", "lon", "car", "mobility_help", "alerts", "near_water", "priority", "sample"]
 
@@ -128,12 +129,43 @@ def data_url(image_id):
 
 
 # ---------- AI ----------
-def ask_ai(messages, max_tokens=450):
-    body = {"model": AI_MODEL, "messages": messages, "max_tokens": max_tokens, "temperature": 0.2}
-    req = urllib.request.Request(AI_URL.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json", "Authorization": "Bearer NONE"})
-    with urllib.request.urlopen(req, timeout=300) as r:
-        return json.loads(r.read())["choices"][0]["message"]["content"].strip()
+import threading as _th
+_AI_GATE = _th.Condition()
+_AI_STATE = {"busy": False, "urgent_waiting": 0}
+
+
+def ask_ai(messages, max_tokens=450, urgent=False):
+    """One AI call at a time from this app; a resident's reply (urgent) always goes before background work."""
+    with _AI_GATE:
+        if urgent:
+            _AI_STATE["urgent_waiting"] += 1
+        while _AI_STATE["busy"] or (not urgent and _AI_STATE["urgent_waiting"]):
+            _AI_GATE.wait()
+        if urgent:
+            _AI_STATE["urgent_waiting"] -= 1
+        _AI_STATE["busy"] = True
+    try:
+        return _ask_ai(messages, max_tokens)
+    finally:
+        with _AI_GATE:
+            _AI_STATE["busy"] = False
+            _AI_GATE.notify_all()
+
+
+def _ask_ai(messages, max_tokens=450):
+    body = json.dumps({"model": AI_MODEL, "messages": messages, "max_tokens": max_tokens, "temperature": 0.2}).encode()
+    last = None
+    for url in AI_URLS:
+        req = urllib.request.Request(url.rstrip("/") + "/chat/completions", data=body,
+                                     headers={"Content-Type": "application/json", "Authorization": "Bearer NONE"})
+        try:
+            with urllib.request.urlopen(req, timeout=300) as r:
+                return json.loads(r.read())["choices"][0]["message"]["content"].strip()
+        except urllib.error.URLError as e:
+            if isinstance(e, urllib.error.HTTPError):
+                raise
+            last = e  # that AI copy isn't running: try the next one
+    raise last
 
 
 def priority(car, mobility, near_water):
@@ -782,7 +814,7 @@ def write_reply(r, case_id, updated):
              "3 or 4 short sentences, no lists, no headings. Use only the facts given; never promise when help arrives. Mention their case number. "
              "Tell them exactly what to do right now for their situation: stay out of moving water, never drive through flooded roads, "
              "go to the highest safe place (not a closed attic), keep the phone charged. If they are in immediate danger, tell them to call 911 now."},
-            {"role": "user", "content": facts}], 200)
+            {"role": "user", "content": facts}], 130, urgent=True)
     except Exception:
         return (f"Your request is in, case {case_id}. Stay out of moving water and never drive through a flooded road. Get to the highest safe "
                 "place you can, keep your phone charged, and call 911 if you are in immediate danger.")
