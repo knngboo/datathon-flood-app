@@ -820,16 +820,31 @@ def write_reply(r, case_id, updated):
                 "place you can, keep your phone charged, and call 911 if you are in immediate danger.")
 
 
+async def body_of(request):
+    try:
+        b = await request.json()
+        return b if isinstance(b, dict) else None
+    except Exception:
+        return None
+
+
 async def api_request(request: Request):
     import time
-    b = await request.json()
+    b = await body_of(request)
+    if b is None:
+        return JSONResponse({"error": "That request couldn't be read. Try sending it again."}, status_code=400)
     try:
         lat, lon = float(b["lat"]), float(b["lon"])
     except (KeyError, TypeError, ValueError):
         return JSONResponse({"error": "We need your location first."}, status_code=400)
-    a = {k: str(b.get("answers", {}).get(k, "")) for k in ("danger", "rising", "trapped", "injured", "evacuate", "vulnerable")}
+    if not (25.8 <= lat <= 36.6 and -106.7 <= lon <= -93.5):
+        return JSONResponse({"error": "This service covers Texas only. If you're in danger, call 911."}, status_code=400)
+    answers = b.get("answers") if isinstance(b.get("answers"), dict) else {}
+    a = {k: str(answers.get(k, "")) for k in ("danger", "rising", "trapped", "injured", "evacuate", "vulnerable")}
     if not all(a.values()):
         return JSONResponse({"error": "Some questions weren't answered. Go back and answer them."}, status_code=400)
+    if any(v not in ("yes", "no", "unsure") for v in a.values()):
+        return JSONResponse({"error": "Answers must be yes, no or not sure."}, status_code=400)
     people = max(1, min(int(b.get("people") or 1), 50))
     r = await run_in_threadpool(make_report, lat, lon, str(b.get("label", ""))[:160], a, people,
                                 str(b.get("name", ""))[:60], str(b.get("phone", ""))[:30])
@@ -849,7 +864,7 @@ async def api_reply(request: Request):
     r = next((x for x in read_requests() if x["id"] == rid), None)
     if not r:
         return JSONResponse({"error": "That request wasn't found."}, status_code=404)
-    b = await request.json()
+    b = await body_of(request) or {}
     reply = await run_in_threadpool(write_reply, r, rid, bool(b.get("updated")))
     return JSONResponse({"reply": reply})
 
@@ -875,7 +890,11 @@ async def api_requests(request):
 
 
 async def api_status(request: Request):
-    b = await request.json()
+    b = await body_of(request) or {}
+    if b.get("status") not in ("New", "On the way", "Resolved"):
+        return JSONResponse({"error": "Status must be New, On the way or Resolved."}, status_code=400)
+    if not any(x["id"] == request.path_params["rid"] for x in read_requests()):
+        return JSONResponse({"error": "That request wasn't found."}, status_code=404)
     with LOCK:
         rows = read_requests()
         for r in rows:
