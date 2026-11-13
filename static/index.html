@@ -81,6 +81,14 @@
   .hhead b { font-size: 1.05rem; color: var(--text); }
   .aipill { font-size: .78rem; font-weight: 700; color: #3B5BDB; background: #E7EEFF; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
   .aiblock { border: 1px solid #C9D6FB; border-left: 4px solid #3B5BDB; border-radius: 12px; padding: 14px 16px; background: #F5F8FF; margin: 12px 0; }
+  .plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; counter-reset: stop; }
+  .plan li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; counter-increment: stop; }
+  .plan li::before { content: counter(stop); width: 22px; height: 22px; border-radius: 50%; background: #3B5BDB; color: #fff; font: 800 .75rem/22px 'Public Sans', system-ui; text-align: center; }
+  .plan .ids { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-right: 6px; vertical-align: 1px; }
+  .plan .rid { font-size: .78rem; font-weight: 800; color: #fff; padding: 2px 9px; border-radius: 999px; text-decoration: none; }
+  .plan .rid:focus-visible { outline: 3px solid #3B5BDB; outline-offset: 2px; }
+  .plan .txt { font-size: .92rem; line-height: 1.45; color: var(--text); }
+  .linkbtn { font: inherit; font-size: .82rem; font-weight: 700; background: none; border: 0; color: var(--ink); text-decoration: underline; cursor: pointer; padding: 0; }
   .aiblock .human { margin: 10px 0 0; font-size: .85rem; color: var(--muted); }
   .compare img.after { filter: brightness(1.35) contrast(1.08); }
   .aiblock .hhead { margin-bottom: 8px; }
@@ -206,7 +214,7 @@
       <div class="queuehead">
         <div class="counts" id="counts"></div>
         <div class="qbtns"><button class="btn" id="briefbtn">Who to reach first</button><button class="btn ghost" id="samplebtn" hidden>Reset demo</button></div>
-        <div class="aiblock" id="brief" hidden><div class="hhead"><b>Who to reach first</b><span style="display:flex;gap:8px;align-items:center"><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span><button id="briefhide" type="button" aria-label="Hide the briefing" style="font:inherit;font-size:.82rem;font-weight:700;background:none;border:0;color:var(--ink);text-decoration:underline;cursor:pointer;padding:0">Hide</button></span></div><p id="briefout" style="white-space:pre-line;max-height:190px;overflow-y:auto"></p><p class="human">This is a suggested order. A responder decides who to send.</p></div>
+        <div class="aiblock" id="brief" hidden><div class="hhead"><b>Who to reach first</b><span style="display:flex;gap:8px;align-items:center"><span class="aipill" title="Written by the AI model on our Dell">AI-generated</span><button id="briefupd" type="button" class="linkbtn">Update</button><button id="briefhide" type="button" class="linkbtn" aria-label="Hide the briefing">Hide</button></span></div><div id="briefout" aria-live="polite"></div><p class="human">This is a suggested order. A responder decides who to send.</p></div>
       </div>
       <div id="cards"></div>
     </div>
@@ -520,7 +528,7 @@ async function openOps() {
   setTimeout(() => opsmap.invalidateSize(), 60);
   if (!PLACES) getJSON('/api/places').then(p => { PLACES = p; if (selId) selectReq(selId, false, true); }).catch(() => {});
   await loadRows(true);
-  if (!briefAuto && ROWS.some(r => r.status !== 'Resolved')) { briefAuto = true; $('#briefbtn').click(); }
+  if (!briefAuto && ROWS.some(r => r.status !== 'Resolved')) { briefAuto = true; runBrief(false); }
 }
 let briefAuto = false;
 let KNOWN = null;
@@ -531,6 +539,7 @@ async function loadRows(fit, auto) {
   KNOWN = ids;
   if (fresh.length) toast(fresh.length === 1 ? `New request ${fresh[0].id} just came in: ${fresh[0].level}` : `${fresh.length} new requests just came in`);
   if (auto && JSON.stringify(prev) === JSON.stringify(ROWS)) return;
+  if (!$('#brief').hidden && briefSig && openSig() !== briefSig) runBrief(true);
   const open = ROWS.filter(r => r.status !== 'Resolved'), n = f => open.filter(f).length;
   $('#counts').innerHTML = [['Open', open.length, '#13294B'], ['Critical', n(r => r.level === 'Critical'), LVL.Critical], ['Hotspots', hotspots(ROWS).length, '#EA580C'], ['On the way', n(r => r.status === 'On the way'), ST['On the way']]]
     .map(([l, v, c]) => `<div class="count"><b style="color:${c}">${v}</b><span>${l}</span></div>`).join('');
@@ -645,13 +654,38 @@ function live(f) {
   return zone + (g ? `<div style="margin-top:14px"><b style="color:var(--ink)">Right now: river gauges nearby</b> <span class="muted" style="font-size:.8rem">(${esc((f.gauges[0] || {}).source || 'NOAA')}, live)</span></div>${g}` : '') + `<p class="muted" style="font-size:.75rem;margin-top:10px">Sources: FEMA disaster declarations and housing assistance records, FEMA National Flood Hazard Layer, NOAA National Water Prediction Service and USGS Water Services (live gauges).</p>`;
 }
 
-$('#samplebtn').onclick = async () => { if (!confirm('Clear every request and load the 6 demo requests again?')) return; $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
-$('#briefhide').onclick = () => { $('#brief').hidden = true; };
-$('#briefbtn').onclick = async () => { $('#brief').hidden = false; $('#briefout').textContent = 'Reading the open requests… about 10 seconds.'; $('#briefbtn').disabled = true;
-  try { const r = await post('/api/requests/briefing'); $('#briefout').innerHTML = esc(r.answer.replace(/\n\s*\n/g, '\n').trim()).replace(/\b(R\d{3})\b/g, '<a href="#responders" class="rid" data-id="$1" style="font-weight:800;color:var(--ink)">$1</a>');
+$('#samplebtn').onclick = async () => { if (!confirm('Clear every request and load the 8 demo requests again?')) return; $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
+$('#briefhide').onclick = () => { $('#brief').hidden = true; $('#briefbtn').hidden = false; };
+$('#briefupd').onclick = () => runBrief(false);
+$('#briefbtn').onclick = () => runBrief(false);
+let briefBusy = false, briefSig = '';
+const openSig = () => ROWS.filter(r => r.status !== 'Resolved').map(r => r.id + r.level + r.status).join();
+const cap = t => t ? t[0].toUpperCase() + t.slice(1) : t;
+function planHTML(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean), byId = Object.fromEntries(ROWS.map(r => [r.id, r]));
+  const items = lines.map(l => l.match(/^((?:R\d{3}[,\s]*)+)\s*[-–—:]\s*(.*)$/)).filter(Boolean);
+  if (!items.length || items.length < lines.length) return `<p style="margin:0;line-height:1.6;white-space:pre-line">${esc(text).replace(/\b(R\d{3})\b/g, '<a href="#responders" class="rid" data-id="$1" style="font-weight:800;color:var(--ink)">$1</a>')}</p>`;
+  return '<ol class="plan">' + items.map(([, ids, why]) => {
+    const list = ids.match(/R\d{3}/g), hot = list.length > 1 || /hotspot/i.test(why);
+    const chips = list.map(id => `<a href="#responders" class="rid" data-id="${id}" style="background:${LVL[byId[id]?.level] || '#13294B'}" title="${esc(byId[id]?.level || '')}">${id}</a>`).join('');
+    const words = why.split(', ').map((w, i) => i ? w.charAt(0).toLowerCase() + w.slice(1) : cap(w)).join(', ').replace(/\s*[.;]\s*$/, '');
+    return `<li><div class="txt"><span class="ids">${chips}${hot ? flame(16) : ''}</span>${esc(words)}</div></li>`;
+  }).join('') + '</ol>';
+}
+async function runBrief(quiet) {
+  if (briefBusy) return; briefBusy = true; briefSig = openSig();
+  $('#brief').hidden = false; $('#briefbtn').hidden = true;
+  const pill = $('#brief .aipill');
+  if (quiet && $('#briefout').innerHTML) { pill.textContent = 'Updating…'; pill.style.cssText = ''; }
+  else $('#briefout').innerHTML = '<p style="margin:0" class="muted">Reading the open requests <span class="dots"><i></i><i></i><i></i></span></p>';
+  try { const r = await post('/api/requests/briefing');
+    $('#briefout').innerHTML = planHTML(r.answer.replace(/\n\s*\n/g, '\n').trim());
     document.querySelectorAll('#briefout .rid').forEach(a => a.onclick = e => { e.preventDefault(); selectReq(a.dataset.id, true); });
-    const pill = $('#brief .aipill'); pill.textContent = r.ai ? 'AI-generated' : 'Plain ranked list'; pill.style.cssText = r.ai ? '' : 'background:#F1F2F4;color:#4B5563';
-  } catch (e) { $('#briefout').textContent = e.message; } $('#briefbtn').disabled = false; };
+    pill.textContent = r.ai ? 'AI-generated' : 'Plain ranked list'; pill.style.cssText = r.ai ? '' : 'background:#F1F2F4;color:#4B5563';
+  } catch (e) { $('#briefout').innerHTML = `<p style="margin:0">${esc(e.message)}</p>`; pill.textContent = 'AI-generated'; }
+  briefBusy = false;
+  if (!$('#brief').hidden && openSig() !== briefSig) runBrief(true);
+}
 
 function toast(msg) {
   let t = document.getElementById('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
