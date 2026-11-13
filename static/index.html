@@ -106,6 +106,10 @@
   .card { background: #fff; margin: 10px 12px; border-radius: 12px; border: 1px solid var(--line); border-left: 6px solid var(--line); padding: 12px 14px; cursor: pointer; }
   .card.sel { box-shadow: 0 0 0 2px var(--ink); }
   .card.done { opacity: .55; }
+  .card.fresh { animation: freshin 2.5s ease-out 2; }
+  @keyframes freshin { 0% { box-shadow: 0 0 0 3px #2563EB; } 100% { box-shadow: 0 0 0 0 transparent; } }
+  #toast { position: fixed; left: 50%; top: 70px; transform: translateX(-50%); z-index: 3000; background: var(--ink); color: #fff; font-weight: 700; padding: 12px 18px; border-radius: 10px; box-shadow: 0 10px 28px rgba(19,41,75,.3); }
+  @media (prefers-reduced-motion: reduce) { .card.fresh { animation: none; } }
   .cardtop { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .lvl { font-weight: 800; font-size: .95rem; }
   .meta { font-size: .82rem; color: var(--muted); }
@@ -453,8 +457,14 @@ async function openOps() {
   if (!PLACES) PLACES = await getJSON('/api/places');
   await loadRows(true);
 }
-async function loadRows(fit) {
+let KNOWN = null;
+async function loadRows(fit, auto) {
+  const prev = ROWS;
   ROWS = await getJSON('/api/requests');
+  const ids = new Set(ROWS.map(r => r.id)), fresh = KNOWN ? ROWS.filter(r => !KNOWN.has(r.id)) : [];
+  KNOWN = ids;
+  if (fresh.length) toast(fresh.length === 1 ? `New request ${fresh[0].id} just came in: ${fresh[0].level}` : `${fresh.length} new requests just came in`);
+  if (auto && JSON.stringify(prev) === JSON.stringify(ROWS)) return;
   const open = ROWS.filter(r => r.status !== 'Resolved'), n = f => open.filter(f).length;
   $('#counts').innerHTML = [['Open', open.length, '#13294B'], ['Critical', n(r => r.level === 'Critical'), LVL.Critical], ['Hotspots', hotspots(ROWS).length, '#EA580C'], ['On the way', n(r => r.status === 'On the way'), ST['On the way']]]
     .map(([l, v, c]) => `<div class="count"><b style="color:${c}">${v}</b><span>${l}</span></div>`).join('');
@@ -474,6 +484,8 @@ async function loadRows(fit) {
     html: `<div style="position:relative">${flame(40)}<span style="position:absolute;right:-4px;top:-2px;background:#13294B;color:#fff;font:800 11px Public Sans,system-ui;border-radius:999px;padding:1px 6px;border:2px solid #fff">${h.ids.length}</span></div>` }) })
     .bindTooltip(`Hotspot: ${h.ids.length} open requests within ${HOT_KM} km (${h.people} people). Send one crew.`).on('click', () => selectReq(h.ids[0], false))))).addTo(opsmap);
   if (fit && ROWS.length) opsmap.fitBounds(ROWS.map(r => [r.lat, r.lon]), { padding: [40, 40], maxZoom: 12 });
+  fresh.forEach(r => { const el = document.querySelector(`.card[data-id="${r.id}"]`); if (el) el.classList.add('fresh'); });
+  if (auto) { document.querySelectorAll('.card').forEach(el => el.classList.toggle('sel', el.dataset.id === selId)); return; }
   if (!selId && ROWS.length) selId = ROWS[0].id;
   if (selId && ROWS.find(r => r.id === selId)) selectReq(selId, false);
 }
@@ -558,6 +570,12 @@ function live(f) {
 $('#samplebtn').onclick = async () => { if (!confirm('Clear every request and load the 6 demo requests again?')) return; $('#samplebtn').disabled = true; await post('/api/requests/samples'); selId = null; await loadRows(true); $('#samplebtn').disabled = false; };
 $('#briefbtn').onclick = async () => { const o = $('#brief'); o.hidden = false; o.textContent = 'Reading the open requests… about 10 seconds.'; $('#briefbtn').disabled = true;
   try { o.innerHTML = '<span class="ai">AI</span>' + esc((await post('/api/requests/briefing')).answer); } catch (e) { o.textContent = e.message; } $('#briefbtn').disabled = false; };
+
+function toast(msg) {
+  let t = document.getElementById('toast'); if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  t.textContent = msg; t.hidden = false; clearTimeout(t._h); t._h = setTimeout(() => t.hidden = true, 5000);
+}
+setInterval(() => { if (location.hash === '#responders' && opsmap) loadRows(false, true).catch(() => {}); }, 10000);
 
 /* ================= TEAM FEEDBACK ================= */
 function whereAmI() {
