@@ -1015,7 +1015,8 @@ async def api_briefing(request):
               "Go down it in exactly that order and explain the first 4 requests, by request ID, with a few words on why each. "
               "Always put every Critical request before any High, and High before Medium. If a hotspot contains urgent requests, say one crew can cover it together. "
               "For each request, use only the reasons written next to it, in the same words. Never add a condition that is not listed for that request: "
-              "for example, never call someone trapped or injured unless 'Trapped' or 'Someone injured' is in their reasons.")
+              "for example, never call someone trapped or injured unless 'Trapped' or 'Someone injured' is in their reasons. "
+              "When a reason starts with 'Not sure:', keep the words 'not sure' (for example 'not sure if in immediate danger').")
     answer = None
     for _ in range(2):
         try:
