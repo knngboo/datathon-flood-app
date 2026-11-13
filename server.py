@@ -246,10 +246,13 @@ async def api_geo(request):
         return JSONResponse({"error": "Type at least a street, town or ZIP code."}, status_code=400)
     try:
         hits = await run_in_threadpool(suggest, q)
-        if not hits:
+    except Exception:
+        hits = []  # OpenStreetMap's full search is busy or rate-limited: fall back to the other address service
+    if not hits:
+        try:
             hits = await run_in_threadpool(photon, q)
-    except Exception as e:
-        return JSONResponse({"error": "Address search isn't reachable right now. Use your current location instead."}, status_code=502)
+        except Exception:
+            return JSONResponse({"error": "Address search isn't reachable right now. Use your current location or pick on a map."}, status_code=502)
     if not hits:
         return JSONResponse({"error": f"No match for \"{q}\" in Texas. Try the street and town, or a ZIP code."}, status_code=404)
     for h in hits:
